@@ -1,0 +1,24 @@
+{
+    "api_endpoints": {
+        "gem": "https://api.gem.gov.in/public/api/v1/contracts",
+        "ogd": "https://api.data.gov.in/resource/"
+    },
+    "anomaly_detection": {
+        "contamination": 0.1,
+        "random_state": 42
+    },
+    "styling": {
+        "primary_color": "#1486c9",
+        "font_family": "Noto Sans",
+        "font_weights": {
+            "heading": 700,
+            "subheading": 500,
+            "body": 400
+        }
+    },
+    "thresholds": {
+        "high_value_anomaly": 2.0,
+        "vendor_concentration": 0.7,
+        "processing_delay": 30
+    }
+}
