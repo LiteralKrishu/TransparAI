@@ -230,7 +230,7 @@ def create_dashboard(df):
             st.markdown("**Top Anomalous Contracts:**")
             anomalies_df = df_with_anomalies[df_with_anomalies['is_anomaly']].nlargest(3, 'contract_value')
             for _, row in anomalies_df.iterrows():
-                st.write(f"• {row['vendor_name']}: INR {row['contract_value']/1e5:.1f}L")
+                st.write(f"â€¢ {row['vendor_name']}: INR {row['contract_value']/1e5:.1f}L")
     
     st.markdown('<div class="sub-header">Vendor Concentration Analysis</div>', unsafe_allow_html=True)
     
