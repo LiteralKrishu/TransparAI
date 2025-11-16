@@ -119,8 +119,31 @@ def load_data(data_source: str):
             st.info("🔄 Fetching data from Government APIs...")
             gem_api = GemGovAPI()
             aggregator = ProcurementDataAggregator(gem_api=gem_api)
-            st.session_state.data = aggregator.fetch_and_aggregate_data()
-            st.success("✓ API data loaded successfully")
+            df, errors = aggregator.fetch_and_aggregate_data()
+
+            # store any API errors in session state for later display
+            st.session_state.api_errors = errors
+
+            if errors:
+                st.error("Some issues occurred while fetching API data. Expand to view details.")
+                with st.expander("View API errors"):
+                    for e in errors:
+                        st.write(f"  • {e}")
+
+            if df is not None and not df.empty:
+                st.session_state.data = df
+                st.success("✓ API data loaded successfully")
+            else:
+                st.session_state.data = None
+                st.warning("No API data available. You can retry or use sample data as a fallback.")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Retry API fetch"):
+                        load_data("Government APIs")
+                with col2:
+                    if st.button("Use sample data instead"):
+                        st.session_state.data = generate_sample_data(n_records=500)
+                        st.success("✓ Sample data loaded as fallback")
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
 
@@ -149,7 +172,11 @@ def display_data_quality_metrics():
                  help="Number of duplicate records detected")
     
     with col4:
-        completeness = ((len(df) - sum(report['missing_values'].values())) / len(df) * 100)
+        if len(df) == 0:
+            completeness = 0.0
+        else:
+            completeness = ((len(df) - sum(report['missing_values'].values())) / len(df) * 100)
+
         st.metric("Data Completeness", f"{completeness:.1f}%",
                  help="Percentage of non-null values")
 
@@ -437,6 +464,12 @@ def main():
             st.write(f"**Records:** {len(st.session_state.data)}")
             st.write(f"**Columns:** {len(st.session_state.data.columns)}")
             st.write(f"**Memory:** {st.session_state.data.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
+        
+        # Show API status if applicable
+        if data_source == "Government APIs":
+            api_errs = st.session_state.get('api_errors') if 'api_errors' in st.session_state else None
+            if api_errs:
+                st.markdown("**API Status:** ⚠️ Issues detected — expand errors on main page")
     
     # Main content
     if page == "Home":
