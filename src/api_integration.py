@@ -260,7 +260,7 @@ class ProcurementDataAggregator:
     
     def fetch_and_aggregate_data(self, start_date: Optional[datetime] = None,
                                 end_date: Optional[datetime] = None,
-                                max_records: int = 500) -> Tuple[pd.DataFrame, list]:
+                                max_records: int = 500) -> pd.DataFrame:
         """
         Fetch and aggregate data from all sources
         
@@ -273,27 +273,22 @@ class ProcurementDataAggregator:
             Aggregated DataFrame
         """
         all_data = []
-        errors = []
-
+        
         # Fetch from GeM API
         if self.gem_api:
-            gem_data, gem_errors = self._fetch_from_gem(max_records)
-            if gem_errors:
-                errors.extend(gem_errors)
-            if gem_data is not None and not gem_data.empty:
+            gem_data = self._fetch_from_gem(max_records)
+            if gem_data is not None:
                 all_data.append(gem_data)
-
+        
         # Fetch from Data.gov.in
         if self.datagov_api:
-            datagov_data, datagov_errors = self._fetch_from_datagov(max_records)
-            if datagov_errors:
-                errors.extend(datagov_errors)
-            if datagov_data is not None and not datagov_data.empty:
+            datagov_data = self._fetch_from_datagov(max_records)
+            if datagov_data is not None:
                 all_data.append(datagov_data)
-
+        
         if all_data:
             combined_df = pd.concat(all_data, ignore_index=True)
-
+            
             # Filter by date if provided
             if start_date and end_date:
                 if 'post_date' in combined_df.columns:
@@ -301,111 +296,56 @@ class ProcurementDataAggregator:
                         (combined_df['post_date'] >= start_date) &
                         (combined_df['post_date'] <= end_date)
                     ]
-
-            return combined_df, errors
-
-        # nothing fetched
-        return pd.DataFrame(), errors
+            
+            return combined_df
+        
+        return pd.DataFrame()
     
-    def _fetch_from_gem(self, max_records: int) -> Tuple[Optional[pd.DataFrame], list]:
-        """Fetch data from GeM API with defensive parsing
-
-        Returns tuple (DataFrame or None, list_of_error_messages)
-        """
-        errors = []
+    def _fetch_from_gem(self, max_records: int) -> Optional[pd.DataFrame]:
+        """Fetch data from GeM API"""
         try:
             records = []
             page = 1
-
+            
             while len(records) < max_records:
                 response = self.gem_api.get_contracts(page=page, limit=100)
-
-                if not response:
-                    errors.append(f"GeM response empty or error on page {page}")
+                
+                if not response or 'records' not in response:
                     break
-
-                # response may use different keys depending on API version
-                candidates = []
-                if isinstance(response, dict):
-                    # try common keys
-                    if 'records' in response:
-                        candidates = response.get('records', [])
-                    elif 'data' in response:
-                        candidates = response.get('data', [])
-                    elif 'result' in response:
-                        # some APIs wrap in result->data
-                        r = response.get('result')
-                        if isinstance(r, dict) and 'data' in r:
-                            candidates = r.get('data', [])
-                        elif isinstance(r, list):
-                            candidates = r
-                    elif 'contracts' in response:
-                        candidates = response.get('contracts', [])
-
-                if not candidates:
-                    # nothing to parse
-                    break
-
-                for record in candidates:
-                    try:
-                        contract_id = record.get('id') or record.get('contract_id') or record.get('contractNo') or 'N/A'
-                        vendor_name = record.get('vendor_name') or record.get('vendor') or record.get('supplier') or 'N/A'
-                        value = record.get('value') or record.get('contract_value') or record.get('estimated_value') or 0
-
-                        post_date = record.get('post_date') or record.get('publish_date') or record.get('created_at')
-                        award_date = record.get('award_date') or record.get('award_on') or record.get('awarded_at')
-
-                        records.append({
-                            'contract_id': contract_id,
-                            'vendor_name': vendor_name,
-                            'contract_value': pd.to_numeric(value, errors='coerce') or 0,
-                            'post_date': post_date,
-                            'award_date': award_date,
-                            'category': record.get('category', 'N/A'),
-                            'status': record.get('status', 'N/A'),
-                            'source': 'GeM'
-                        })
-                    except Exception as rec_e:
-                        errors.append(f"Error parsing GeM record: {str(rec_e)}")
-
+                
+                for record in response.get('records', []):
+                    records.append({
+                        'contract_id': record.get('id', 'N/A'),
+                        'vendor_name': record.get('vendor_name', 'N/A'),
+                        'contract_value': float(record.get('value', 0)),
+                        'post_date': pd.to_datetime(record.get('post_date')),
+                        'award_date': pd.to_datetime(record.get('award_date')),
+                        'category': record.get('category', 'N/A'),
+                        'status': record.get('status', 'N/A'),
+                        'source': 'GeM'
+                    })
+                
                 if len(records) >= max_records:
                     break
-
+                
                 page += 1
-
-            df = pd.DataFrame(records) if records else pd.DataFrame()
-
-            # convert dates safely
-            for col in ['post_date', 'award_date']:
-                if col in df.columns:
-                    df[col] = pd.to_datetime(df[col], errors='coerce')
-
-            # ensure numeric
-            if 'contract_value' in df.columns:
-                df['contract_value'] = pd.to_numeric(df['contract_value'], errors='coerce').fillna(0)
-
-            return df, errors
-
+            
+            return pd.DataFrame(records) if records else None
+            
         except Exception as e:
-            errors.append(f"Error fetching from GeM: {str(e)}")
-            return pd.DataFrame(), errors
+            print(f"Error fetching from GeM: {str(e)}")
+            return None
     
-    def _fetch_from_datagov(self, max_records: int) -> Tuple[Optional[pd.DataFrame], list]:
-        """Fetch data from Data.gov.in
-
-        Returns tuple (DataFrame, list_of_errors)
-        """
-        errors = []
+    def _fetch_from_datagov(self, max_records: int) -> Optional[pd.DataFrame]:
+        """Fetch data from Data.gov.in"""
         try:
             # This would require specific resource IDs from data.gov.in
             # Implementation depends on available procurement datasets
-            # For now return empty dataframe and a helpful message
-            errors.append("Data.gov.in integration not configured (no resource_id).")
-            return pd.DataFrame(), errors
-
+            return None
+            
         except Exception as e:
-            errors.append(f"Error fetching from Data.gov.in: {str(e)}")
-            return pd.DataFrame(), errors
+            print(f"Error fetching from Data.gov.in: {str(e)}")
+            return None
 
 
 class DataValidator:

@@ -97,9 +97,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
+# Initialize session state with sample data as default
 if 'data' not in st.session_state:
-    st.session_state.data = None
+    try:
+        st.session_state.data = generate_sample_data(n_records=500)
+        st.session_state.data_source = "Sample Data"
+    except Exception as e:
+        st.session_state.data = None
+        st.session_state.data_source = None
+
 if 'analysis_complete' not in st.session_state:
     st.session_state.analysis_complete = False
 
@@ -109,41 +115,21 @@ def load_data(data_source: str):
     try:
         if data_source == "Sample Data":
             st.session_state.data = generate_sample_data(n_records=500)
+            st.session_state.data_source = "Sample Data"
             st.success("✓ Sample data loaded successfully")
         elif data_source == "CSV File":
             uploaded_file = st.file_uploader("Upload CSV file", type=['csv'])
             if uploaded_file is not None:
                 st.session_state.data = pd.read_csv(uploaded_file)
+                st.session_state.data_source = "CSV File"
                 st.success("✓ CSV file loaded successfully")
         elif data_source == "Government APIs":
             st.info("🔄 Fetching data from Government APIs...")
             gem_api = GemGovAPI()
             aggregator = ProcurementDataAggregator(gem_api=gem_api)
-            df, errors = aggregator.fetch_and_aggregate_data()
-
-            # store any API errors in session state for later display
-            st.session_state.api_errors = errors
-
-            if errors:
-                st.error("Some issues occurred while fetching API data. Expand to view details.")
-                with st.expander("View API errors"):
-                    for e in errors:
-                        st.write(f"  • {e}")
-
-            if df is not None and not df.empty:
-                st.session_state.data = df
-                st.success("✓ API data loaded successfully")
-            else:
-                st.session_state.data = None
-                st.warning("No API data available. You can retry or use sample data as a fallback.")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Retry API fetch"):
-                        load_data("Government APIs")
-                with col2:
-                    if st.button("Use sample data instead"):
-                        st.session_state.data = generate_sample_data(n_records=500)
-                        st.success("✓ Sample data loaded as fallback")
+            st.session_state.data = aggregator.fetch_and_aggregate_data()
+            st.session_state.data_source = "Government APIs"
+            st.success("✓ API data loaded successfully")
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
 
@@ -172,11 +158,7 @@ def display_data_quality_metrics():
                  help="Number of duplicate records detected")
     
     with col4:
-        if len(df) == 0:
-            completeness = 0.0
-        else:
-            completeness = ((len(df) - sum(report['missing_values'].values())) / len(df) * 100)
-
+        completeness = ((len(df) - sum(report['missing_values'].values())) / len(df) * 100)
         st.metric("Data Completeness", f"{completeness:.1f}%",
                  help="Percentage of non-null values")
 
@@ -413,6 +395,229 @@ def perform_efficiency_analysis():
     st.plotly_chart(fig_ts, use_container_width=True)
 
 
+def display_home_summary():
+    """Display enhanced home page with data summary"""
+    st.markdown('<div class="main-header">📊 TransparAI</div>', unsafe_allow_html=True)
+    st.markdown("**Advanced Procurement Analytics & Transparency Platform**")
+    st.markdown("*Powered by SFLC.in for Defending Digital Rights*")
+    st.markdown("---")
+    
+    if st.session_state.data is not None:
+        df = st.session_state.data
+        
+        # Overview Section
+        st.markdown('<div class="sub-header">📈 Data Summary Overview</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Contracts", f"{len(df):,}", help="Total number of procurement records")
+        
+        with col2:
+            total_value = df['contract_value'].sum() / 1e7
+            st.metric("Total Value", f"₹{total_value:.1f} Cr", help="Total procurement value in Crores")
+        
+        with col3:
+            avg_contract = df['contract_value'].mean() / 1e5
+            st.metric("Avg Contract", f"₹{avg_contract:.1f} L", help="Average contract value in Lakhs")
+        
+        with col4:
+            unique_vendors = df['vendor_name'].nunique()
+            st.metric("Unique Vendors", unique_vendors, help="Number of unique vendors")
+        
+        # Key Insights
+        st.markdown('<div class="sub-header">🔍 Key Insights</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            hhi = VendorAnalysis.herfindahl_index(df)
+            if hhi > 2500:
+                status = "🔴 Highly Concentrated"
+                color = "danger"
+            elif hhi > 1500:
+                status = "🟡 Moderately Concentrated"
+                color = "warning"
+            else:
+                status = "🟢 Competitive"
+                color = "success"
+            
+            st.info(f"**Market Concentration (HHI):** {hhi:.0f}\n\n{status}")
+        
+        with col2:
+            cr4 = VendorAnalysis.vendor_concentration_ratio(df, top_n=4)
+            st.info(f"**Top 4 Vendors (CR-4):** {cr4:.1f}%\n\nMarket share of leading vendors")
+        
+        with col3:
+            diversity = VendorAnalysis.vendor_diversity_index(df)
+            st.info(f"**Vendor Diversity:** {diversity:.3f}\n\nHigher values = more diverse")
+        
+        # Processing Efficiency
+        st.markdown('<div class="sub-header">⏱️ Procurement Cycle Efficiency</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            avg_processing = df['processing_days'].mean()
+            st.metric("Avg Processing Time", f"{avg_processing:.0f} days")
+        
+        with col2:
+            min_processing = df['processing_days'].min()
+            max_processing = df['processing_days'].max()
+            st.metric("Processing Range", f"{min_processing:.0f} - {max_processing:.0f} days")
+        
+        with col3:
+            fast_tracked = (df['processing_days'] < 30).sum()
+            st.metric("Fast-Tracked (<30 days)", f"{fast_tracked} ({fast_tracked/len(df)*100:.1f}%)")
+        
+        # Data Quality & Anomalies
+        st.markdown('<div class="sub-header">✅ Data Quality & Anomalies</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            is_valid, errors = DataValidator.validate_contract_data(df)
+            if is_valid:
+                st.success("✓ Data Quality: PASSED")
+            else:
+                st.warning(f"⚠️ Issues found: {len(errors)}")
+        
+        with col2:
+            iso_anomalies = AnomalyDetection.isolation_forest_detection(
+                df, ['contract_value', 'processing_days'], contamination=0.1
+            )
+            anomaly_pct = (iso_anomalies.sum() / len(df) * 100)
+            st.metric("Anomalies Detected", f"{iso_anomalies.sum()} ({anomaly_pct:.1f}%)")
+        
+        with col3:
+            report = DataValidator.get_data_quality_report(df)
+            completeness = ((len(df) - sum(report['missing_values'].values())) / len(df) * 100)
+            st.metric("Data Completeness", f"{completeness:.1f}%")
+        
+        # Financial Summary
+        st.markdown('<div class="sub-header">💰 Financial Summary</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            min_value = df['contract_value'].min() / 1e5
+            st.metric("Min Contract", f"₹{min_value:.1f} L")
+        
+        with col2:
+            max_value = df['contract_value'].max() / 1e7
+            st.metric("Max Contract", f"₹{max_value:.1f} Cr")
+        
+        with col3:
+            median_value = df['contract_value'].median() / 1e5
+            st.metric("Median Contract", f"₹{median_value:.1f} L")
+        
+        with col4:
+            std_value = df['contract_value'].std() / 1e5
+            st.metric("Std Deviation", f"₹{std_value:.1f} L")
+        
+        # Category & Ministry Analysis
+        st.markdown('<div class="sub-header">📊 Category & Ministry Distribution</div>', unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if 'category' in df.columns:
+                categories = df['category'].value_counts()
+                st.write("**Top Categories:**")
+                for cat, count in categories.head(5).items():
+                    st.write(f"  • {cat}: {count} contracts")
+        
+        with col2:
+            if 'ministry' in df.columns:
+                ministries = df['ministry'].value_counts()
+                st.write("**Top Ministries:**")
+                for min, count in ministries.head(5).items():
+                    st.write(f"  • {min}: {count} contracts")
+        
+        # Top Vendors
+        st.markdown('<div class="sub-header">🏢 Top Vendors</div>', unsafe_allow_html=True)
+        
+        top_vendors = df.groupby('vendor_name')['contract_value'].agg(['sum', 'count']).sort_values('sum', ascending=False).head(10)
+        top_vendors.columns = ['Total Value (₹)', 'Contract Count']
+        top_vendors['Total Value (₹)'] = top_vendors['Total Value (₹)'].apply(lambda x: f"₹{x/1e7:.1f} Cr")
+        
+        st.dataframe(top_vendors, use_container_width=True)
+        
+        # Quick Actions
+        st.markdown('<div class="sub-header">⚡ Quick Actions</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("🔍 Run Anomaly Detection", use_container_width=True):
+                st.session_state.page = "Anomaly Detection"
+                st.rerun()
+        
+        with col2:
+            if st.button("🏢 Vendor Analysis", use_container_width=True):
+                st.session_state.page = "Vendor Analysis"
+                st.rerun()
+        
+        with col3:
+            if st.button("📊 Executive Dashboard", use_container_width=True):
+                st.session_state.page = "Executive Dashboard"
+                st.rerun()
+        
+        # Download Options
+        st.markdown("---")
+        st.markdown('<div class="sub-header">📥 Download Options</div>', unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            csv = df.to_csv(index=False)
+            st.download_button(
+                "📥 Download Full Dataset (CSV)",
+                csv,
+                "procurement_data.csv",
+                "text/csv",
+                use_container_width=True
+            )
+        
+        with col2:
+            json_str = df.to_json(orient='records', date_format='iso')
+            st.download_button(
+                "📥 Download Data (JSON)",
+                json_str,
+                "procurement_data.json",
+                "application/json",
+                use_container_width=True
+            )
+    
+    else:
+        st.info("📥 Load sample data to get started! Use the 'Load Data' button in the sidebar.")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            ### 🚀 Getting Started
+            
+            1. Click **'Load Data'** in the sidebar (Sample Data is recommended)
+            2. Explore the data summary above
+            3. Use navigation to run different analyses
+            4. Download reports as needed
+            """)
+        
+        with col2:
+            st.markdown("""
+            ### 📖 Available Features
+            
+            - 🔍 Anomaly Detection
+            - 🏢 Vendor Analysis
+            - 🚨 Collusion Detection
+            - 💰 Financial Analysis
+            - ⚡ Efficiency Analysis
+            - 📊 Executive Dashboard
+            - 📈 Statistics
+            """)
+
+
 def display_executive_dashboard():
     """Display comprehensive executive dashboard"""
     if st.session_state.data is None:
@@ -435,7 +640,7 @@ def main():
     st.markdown("Powered by SFLC.in for Defending Digital Rights")
     st.markdown("---")
     
-    # Sidebar
+    # Sidebar with improved layout
     with st.sidebar:
         st.markdown("### 🎯 Navigation")
         
@@ -443,70 +648,45 @@ def main():
             "Select Analysis:",
             ["Home", "Data Management", "Anomaly Detection", "Vendor Analysis",
              "Collusion Detection", "Financial Analysis", "Efficiency Analysis",
-             "Executive Dashboard", "Statistics", "Settings"]
+             "Executive Dashboard", "Statistics", "Settings"],
+            label_visibility="collapsed"
         )
         
         st.markdown("---")
         st.markdown("### 📥 Data Source")
         
+        current_source = st.session_state.get("data_source", "Sample Data")
         data_source = st.selectbox(
             "Select data source:",
-            ["Sample Data", "CSV File", "Government APIs"]
+            ["Sample Data", "CSV File", "Government APIs"],
+            index=["Sample Data", "CSV File", "Government APIs"].index(current_source) if current_source in ["Sample Data", "CSV File", "Government APIs"] else 0,
+            label_visibility="collapsed"
         )
         
-        if st.button("Load Data", use_container_width=True):
-            load_data(data_source)
+        if st.button("🔄 Load Data", use_container_width=True):
+            with st.spinner("Loading data..."):
+                load_data(data_source)
+                st.rerun()
         
         st.markdown("---")
         st.markdown("### 📊 Dataset Info")
         
         if st.session_state.data is not None:
-            st.write(f"**Records:** {len(st.session_state.data)}")
-            st.write(f"**Columns:** {len(st.session_state.data.columns)}")
-            st.write(f"**Memory:** {st.session_state.data.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
-        
-        # Show API status if applicable
-        if data_source == "Government APIs":
-            api_errs = st.session_state.get('api_errors') if 'api_errors' in st.session_state else None
-            if api_errs:
-                st.markdown("**API Status:** ⚠️ Issues detected — expand errors on main page")
+            df = st.session_state.data
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Records", f"{len(df):,}")
+            with col2:
+                st.metric("Columns", len(df.columns))
+            
+            st.write(f"**Source:** {st.session_state.get('data_source', 'Unknown')}")
+            st.write(f"**Memory:** {df.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
+        else:
+            st.warning("No data loaded")
     
     # Main content
     if page == "Home":
-        st.markdown("""
-        ## Welcome to TransparAI
-        
-        ### Features:
-        
-        🔍 **Anomaly Detection**
-        - Z-Score, IQR, and Isolation Forest methods
-        - Real-time risk assessment
-        
-        🏢 **Vendor Analysis**
-        - Market concentration metrics (HHI, CR-4)
-        - Vendor diversity analysis
-        - Repeat contract patterns
-        
-        🚨 **Collusion Detection**
-        - Suspicious bid clustering
-        - Price pattern analysis
-        
-        💰 **Financial Analysis**
-        - Cost efficiency metrics
-        - ROI analysis
-        - Budget forecasting
-        
-        ⚡ **Efficiency Analysis**
-        - Procurement efficiency scoring
-        - Competitive bidding analysis
-        - Time-series tracking
-        
-        📊 **Advanced Visualizations**
-        - Risk heatmaps
-        - Cluster analysis
-        - Multi-panel dashboards
-        - Time series analysis
-        """)
+        display_home_summary()
     
     elif page == "Data Management":
         st.markdown("### <div class='sub-header'>📁 Data Management</div>",
