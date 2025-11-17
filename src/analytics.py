@@ -213,7 +213,7 @@ class VendorAnalysis:
     """Vendor concentration and behavior analysis"""
     
     @staticmethod
-    def herfindahl_index(df: pd.DataFrame, value_column: str, 
+    def herfindahl_index(df: pd.DataFrame, value_column: str = 'contract_value', 
                         vendor_column: str = 'vendor_name') -> float:
         """
         Calculate Herfindahl-Hirschman Index (HHI) for market concentration
@@ -235,7 +235,7 @@ class VendorAnalysis:
         return hhi
     
     @staticmethod
-    def vendor_concentration_ratio(df: pd.DataFrame, value_column: str, 
+    def vendor_concentration_ratio(df: pd.DataFrame, value_column: str = 'contract_value', 
                                   top_n: int = 4, 
                                   vendor_column: str = 'vendor_name') -> float:
         """
@@ -259,7 +259,7 @@ class VendorAnalysis:
         return cr
     
     @staticmethod
-    def vendor_diversity_index(df: pd.DataFrame, value_column: str, 
+    def vendor_diversity_index(df: pd.DataFrame, value_column: str = 'contract_value', 
                               vendor_column: str = 'vendor_name') -> float:
         """
         Calculate vendor diversity using Shannon entropy
