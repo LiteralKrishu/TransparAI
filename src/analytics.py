@@ -226,12 +226,33 @@ class VendorAnalysis:
         Returns:
             HHI value (0-10000 scale)
         """
+        # Basic validations
+        if df is None:
+            raise ValueError("DataFrame `df` is None")
+
+        # If the expected value column is missing, try to infer a numeric value column
+        if value_column not in df.columns:
+            fallback_candidates = [c for c in df.columns if 'value' in c.lower() or 'amount' in c.lower()]
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            chosen = None
+            for cand in ['contract_value'] + fallback_candidates + numeric_cols:
+                if cand in df.columns:
+                    chosen = cand
+                    break
+
+            if chosen is None:
+                raise KeyError(f"Value column '{value_column}' not found and no numeric fallback available")
+            value_column = chosen
+
         vendor_values = df.groupby(vendor_column)[value_column].sum()
         total_value = vendor_values.sum()
-        
+
+        if total_value == 0 or np.isnan(total_value):
+            return 0.0
+
         market_shares = (vendor_values / total_value) * 100
-        hhi = np.sum(market_shares ** 2)
-        
+        hhi = float(np.sum(market_shares ** 2))
+
         return hhi
     
     @staticmethod
@@ -250,12 +271,31 @@ class VendorAnalysis:
         Returns:
             Concentration ratio (0-100 scale)
         """
+        if df is None:
+            raise ValueError("DataFrame `df` is None")
+
+        if value_column not in df.columns:
+            fallback_candidates = [c for c in df.columns if 'value' in c.lower() or 'amount' in c.lower()]
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            chosen = None
+            for cand in ['contract_value'] + fallback_candidates + numeric_cols:
+                if cand in df.columns:
+                    chosen = cand
+                    break
+
+            if chosen is None:
+                raise KeyError(f"Value column '{value_column}' not found and no numeric fallback available")
+            value_column = chosen
+
         vendor_values = df.groupby(vendor_column)[value_column].sum()
         total_value = vendor_values.sum()
-        
+
+        if total_value == 0 or np.isnan(total_value):
+            return 0.0
+
         top_vendors_value = vendor_values.nlargest(top_n).sum()
-        cr = (top_vendors_value / total_value) * 100
-        
+        cr = float((top_vendors_value / total_value) * 100)
+
         return cr
     
     @staticmethod
@@ -272,15 +312,34 @@ class VendorAnalysis:
         Returns:
             Diversity index (0-1 scale, higher = more diverse)
         """
+        if df is None:
+            raise ValueError("DataFrame `df` is None")
+
+        if value_column not in df.columns:
+            fallback_candidates = [c for c in df.columns if 'value' in c.lower() or 'amount' in c.lower()]
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            chosen = None
+            for cand in ['contract_value'] + fallback_candidates + numeric_cols:
+                if cand in df.columns:
+                    chosen = cand
+                    break
+
+            if chosen is None:
+                raise KeyError(f"Value column '{value_column}' not found and no numeric fallback available")
+            value_column = chosen
+
         vendor_values = df.groupby(vendor_column)[value_column].sum()
         total_value = vendor_values.sum()
-        
+
+        if total_value == 0 or np.isnan(total_value):
+            return 0.0
+
         market_shares = vendor_values / total_value
         entropy = -np.sum(market_shares * np.log(market_shares + 1e-10))
-        
-        max_entropy = np.log(len(market_shares))
-        normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
-        
+
+        max_entropy = np.log(len(market_shares)) if len(market_shares) > 0 else 1.0
+        normalized_entropy = float(entropy / max_entropy) if max_entropy > 0 else 0.0
+
         return normalized_entropy
     
     @staticmethod
