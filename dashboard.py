@@ -397,9 +397,8 @@ def perform_efficiency_analysis():
 
 def display_home_summary():
     """Display enhanced home page with data summary"""
-    st.markdown('<div class="main-header">📊 TransparAI</div>', unsafe_allow_html=True)
-    st.markdown("**Advanced Procurement Analytics & Transparency Platform**")
-    st.markdown("*Powered by SFLC.in for Defending Digital Rights*")
+    # The global page header is rendered in `main()`; show a concise subtitle here to avoid duplication
+    st.markdown('### 📊 Home — Data Summary', unsafe_allow_html=True)
     st.markdown("---")
     
     if st.session_state.data is not None:
