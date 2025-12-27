@@ -1,7 +1,10 @@
 {
     "api_endpoints": {
         "gem": "https://api.gem.gov.in/public/api/v1/contracts",
-        "ogd": "https://api.data.gov.in/resource/"
+        "ogd": "https://api.data.gov.in/resource/",
+        "data_gov_procurement": "https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070",
+        "eprocure": "https://eprocure.gov.in/eprocure/app",
+        "cppp": "https://www.cppp.gov.in/api/tenders"
     },
     "anomaly_detection": {
         "contamination": 0.1,
