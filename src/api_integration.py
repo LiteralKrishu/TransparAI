@@ -260,9 +260,9 @@ class ProcurementDataAggregator:
     
     def fetch_and_aggregate_data(self, start_date: Optional[datetime] = None,
                                 end_date: Optional[datetime] = None,
-                                max_records: int = 500) -> pd.DataFrame:
+                                max_records: int = 500) -> Tuple[pd.DataFrame, str, List[str]]:
         """
-        Fetch and aggregate data from all sources
+        Fetch and aggregate data from all sources with fallback to sample data
         
         Args:
             start_date: Start date for filtering
@@ -270,22 +270,34 @@ class ProcurementDataAggregator:
             max_records: Maximum records to fetch
             
         Returns:
-            Aggregated DataFrame
+            Tuple of (DataFrame, source_name, error_messages)
         """
         all_data = []
+        errors = []
         
         # Fetch from GeM API
         if self.gem_api:
+            print("Attempting to fetch data from GeM API...")
             gem_data = self._fetch_from_gem(max_records)
-            if gem_data is not None:
+            if gem_data is not None and not gem_data.empty:
                 all_data.append(gem_data)
+                print(f"[OK] Successfully fetched {len(gem_data)} records from GeM API")
+            else:
+                errors.append("GeM API: No data returned or connection failed")
+                print("[WARNING] GeM API failed to return data")
         
         # Fetch from Data.gov.in
         if self.datagov_api:
+            print("Attempting to fetch data from Data.gov.in API...")
             datagov_data = self._fetch_from_datagov(max_records)
-            if datagov_data is not None:
+            if datagov_data is not None and not datagov_data.empty:
                 all_data.append(datagov_data)
+                print(f"[OK] Successfully fetched {len(datagov_data)} records from Data.gov.in")
+            else:
+                errors.append("Data.gov.in API: No data returned or connection failed")
+                print("[WARNING] Data.gov.in API failed to return data")
         
+        # If we have data, process and return it
         if all_data:
             combined_df = pd.concat(all_data, ignore_index=True)
             
@@ -297,43 +309,96 @@ class ProcurementDataAggregator:
                         (combined_df['post_date'] <= end_date)
                     ]
             
-            return combined_df
+            source_name = "Government APIs"
+            return combined_df, source_name, errors
         
-        return pd.DataFrame()
+        # Fallback to sample data if APIs failed
+        print("[WARNING] All API sources failed. Falling back to sample data...")
+        errors.append("All API endpoints failed or returned empty data")
+        errors.append("Automatically switched to sample data for demonstration")
+        
+        try:
+            from src.data_generator import generate_sample_data
+            sample_df = generate_sample_data(n_records=max_records)
+            return sample_df, "Sample Data (API Fallback)", errors
+        except Exception as e:
+            errors.append(f"Failed to generate sample data: {str(e)}")
+            return pd.DataFrame(), "No Data", errors
     
     def _fetch_from_gem(self, max_records: int) -> Optional[pd.DataFrame]:
-        """Fetch data from GeM API"""
+        """Fetch data from GeM API with comprehensive error handling"""
         try:
             records = []
             page = 1
+            max_pages = 10  # Prevent infinite loops
             
-            while len(records) < max_records:
-                response = self.gem_api.get_contracts(page=page, limit=100)
-                
-                if not response or 'records' not in response:
+            while len(records) < max_records and page <= max_pages:
+                try:
+                    response = self.gem_api.get_contracts(page=page, limit=100)
+                    
+                    if not response:
+                        print(f"GeM API: No response received for page {page}")
+                        break
+                    
+                    # Handle different response formats
+                    data_key = None
+                    for key in ['records', 'data', 'contracts', 'results']:
+                        if key in response:
+                            data_key = key
+                            break
+                    
+                    if not data_key:
+                        print(f"GeM API: Unexpected response format: {list(response.keys())}")
+                        break
+                    
+                    page_records = response.get(data_key, [])
+                    if not page_records:
+                        break
+                    
+                    for record in page_records:
+                        try:
+                            # Flexible field mapping
+                            contract_id = record.get('id') or record.get('contract_id') or record.get('contractId') or f'GEM_{len(records)}'
+                            vendor_name = record.get('vendor_name') or record.get('vendorName') or record.get('vendor') or 'Unknown Vendor'
+                            value = record.get('value') or record.get('contract_value') or record.get('contractValue') or record.get('amount') or 0
+                            
+                            records.append({
+                                'contract_id': str(contract_id),
+                                'vendor_name': str(vendor_name),
+                                'contract_value': float(value),
+                                'post_date': pd.to_datetime(record.get('post_date') or record.get('postDate') or datetime.now(), errors='coerce'),
+                                'award_date': pd.to_datetime(record.get('award_date') or record.get('awardDate') or datetime.now(), errors='coerce'),
+                                'category': record.get('category') or record.get('type') or 'Uncategorized',
+                                'status': record.get('status') or 'Active',
+                                'ministry': record.get('ministry') or record.get('department') or 'N/A',
+                                'location': record.get('location') or record.get('state') or 'N/A',
+                                'source': 'GeM'
+                            })
+                        except Exception as e:
+                            print(f"GeM API: Error processing record: {str(e)}")
+                            continue
+                    
+                    if len(records) >= max_records:
+                        break
+                    
+                    page += 1
+                    
+                except Exception as e:
+                    print(f"GeM API: Error fetching page {page}: {str(e)}")
                     break
-                
-                for record in response.get('records', []):
-                    records.append({
-                        'contract_id': record.get('id', 'N/A'),
-                        'vendor_name': record.get('vendor_name', 'N/A'),
-                        'contract_value': float(record.get('value', 0)),
-                        'post_date': pd.to_datetime(record.get('post_date')),
-                        'award_date': pd.to_datetime(record.get('award_date')),
-                        'category': record.get('category', 'N/A'),
-                        'status': record.get('status', 'N/A'),
-                        'source': 'GeM'
-                    })
-                
-                if len(records) >= max_records:
-                    break
-                
-                page += 1
             
-            return pd.DataFrame(records) if records else None
+            if records:
+                df = pd.DataFrame(records)
+                # Calculate processing days
+                df['processing_days'] = (df['award_date'] - df['post_date']).dt.days
+                df['processing_days'] = df['processing_days'].fillna(0).abs()
+                return df
+            else:
+                print("GeM API: No records collected")
+                return None
             
         except Exception as e:
-            print(f"Error fetching from GeM: {str(e)}")
+            print(f"GeM API: Critical error in _fetch_from_gem: {str(e)}")
             return None
     
     def _fetch_from_datagov(self, max_records: int) -> Optional[pd.DataFrame]:

@@ -125,12 +125,14 @@ class IndiaProcurementData:
             return None
 
     def fetch_real_time_data(self):
-        """Fetch real-time data from Government APIs"""
+        """Fetch real-time data from Government APIs with fallback"""
         try:
             headers = {
                 'User-Agent': 'TransparAI-SFLC.in-Hackathon-Project',
                 'Accept': 'application/json'
             }
+            
+            st.info("🔄 Attempting to connect to GeM API...")
             
             try:
                 response = requests.get(
@@ -138,19 +140,88 @@ class IndiaProcurementData:
                     headers=headers,
                     timeout=10
                 )
+                
                 if response.status_code == 200:
+                    st.success("✓ Connected to GeM API")
                     return self.process_gem_data(response.json())
-            except:
-                pass
-            
-            return self.fetch_sample_gep_data()
+                else:
+                    st.warning(f"⚠️ GeM API returned status code: {response.status_code}")
+                    st.info("🔄 Falling back to sample data...")
+                    return self.fetch_sample_gep_data()
+                    
+            except requests.exceptions.Timeout:
+                st.warning("⚠️ GeM API request timed out (>10 seconds)")
+                st.info("🔄 Falling back to sample data...")
+                return self.fetch_sample_gep_data()
+                
+            except requests.exceptions.ConnectionError:
+                st.warning("⚠️ Cannot connect to GeM API (network/firewall issue)")
+                st.info("🔄 Falling back to sample data...")
+                return self.fetch_sample_gep_data()
+                
+            except Exception as e:
+                st.warning(f"⚠️ GeM API error: {str(e)}")
+                st.info("🔄 Falling back to sample data...")
+                return self.fetch_sample_gep_data()
             
         except Exception as e:
-            st.warning(f"Real-time API unavailable, using sample data: {str(e)}")
+            st.error(f"❌ Unexpected error in fetch_real_time_data: {str(e)}")
+            st.info("🔄 Falling back to sample data...")
             return self.fetch_sample_gep_data()
     
     def process_gem_data(self, json_data):
-        return self.fetch_sample_gep_data()
+        """Process GeM API JSON response into DataFrame"""
+        try:
+            # Handle different response formats
+            data_key = None
+            for key in ['records', 'data', 'contracts', 'results']:
+                if key in json_data:
+                    data_key = key
+                    break
+            
+            if not data_key:
+                st.warning(f"API returned unexpected format. Keys: {list(json_data.keys())}")
+                return self.fetch_sample_gep_data()
+            
+            records = json_data.get(data_key, [])
+            if not records:
+                st.warning("API returned empty data")
+                return self.fetch_sample_gep_data()
+            
+            # Process records with flexible field mapping
+            processed_data = []
+            for record in records:
+                try:
+                    processed_data.append({
+                        'contract_id': record.get('id') or record.get('contract_id') or record.get('contractId') or 'N/A',
+                        'vendor_name': record.get('vendor_name') or record.get('vendorName') or record.get('vendor') or 'Unknown',
+                        'category': record.get('category') or record.get('type') or 'Uncategorized',
+                        'contract_value': float(record.get('value') or record.get('contract_value') or record.get('amount') or 0),
+                        'post_date': pd.to_datetime(record.get('post_date') or record.get('postDate'), errors='coerce'),
+                        'award_date': pd.to_datetime(record.get('award_date') or record.get('awardDate'), errors='coerce'),
+                        'ministry': record.get('ministry') or record.get('department') or 'N/A',
+                        'location': record.get('location') or record.get('state') or 'N/A'
+                    })
+                except Exception as e:
+                    continue  # Skip problematic records
+            
+            if not processed_data:
+                st.warning("Could not process any API records")
+                return self.fetch_sample_gep_data()
+            
+            # Create DataFrame
+            df = pd.DataFrame(processed_data)
+            df['post_date'] = pd.to_datetime(df['post_date'], errors='coerce')
+            df['award_date'] = pd.to_datetime(df['award_date'], errors='coerce')
+            df['processing_days'] = (df['award_date'] - df['post_date']).dt.days
+            df['processing_days'] = df['processing_days'].fillna(0).abs()
+            
+            st.success(f"✓ Processed {len(df)} records from API")
+            return df
+            
+        except Exception as e:
+            st.error(f"Error processing API data: {str(e)}")
+            return self.fetch_sample_gep_data()
 
 def detect_anomalies(df):
     """Detect anomalous contracts using Isolation Forest"""

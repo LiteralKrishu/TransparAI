@@ -127,11 +127,51 @@ def load_data(data_source: str):
             st.info("🔄 Fetching data from Government APIs...")
             gem_api = GemGovAPI()
             aggregator = ProcurementDataAggregator(gem_api=gem_api)
-            st.session_state.data = aggregator.fetch_and_aggregate_data()
-            st.session_state.data_source = "Government APIs"
-            st.success("✓ API data loaded successfully")
+            
+            # Get data with error tracking
+            df, source_name, errors = aggregator.fetch_and_aggregate_data(max_records=500)
+            
+            # Check if we got valid data
+            if df is not None and not df.empty:
+                st.session_state.data = df
+                st.session_state.data_source = source_name
+                
+                # Show warnings if API had issues but fallback worked
+                if errors:
+                    st.warning("⚠️ API Connection Issues Detected")
+                    with st.expander("Show API Error Details"):
+                        for error in errors:
+                            st.write(f"• {error}")
+                
+                # Show success message
+                if "Fallback" in source_name:
+                    st.info(f"ℹ️ Using {source_name} ({len(df)} records)")
+                else:
+                    st.success(f"✓ Data loaded from {source_name} ({len(df)} records)")
+            else:
+                # Complete failure - no data at all
+                st.error("❌ Failed to load data from any source")
+                if errors:
+                    st.error("Error details:")
+                    for error in errors:
+                        st.write(f"• {error}")
+                
+                # Fallback to sample data as last resort
+                st.warning("🔄 Loading sample data as fallback...")
+                st.session_state.data = generate_sample_data(n_records=500)
+                st.session_state.data_source = "Sample Data (Emergency Fallback)"
+                st.info("✓ Sample data loaded successfully")
+                
     except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+        st.error(f"❌ Unexpected error loading data: {str(e)}")
+        # Emergency fallback
+        try:
+            st.warning("🔄 Attempting to load sample data as fallback...")
+            st.session_state.data = generate_sample_data(n_records=500)
+            st.session_state.data_source = "Sample Data (Error Recovery)"
+            st.success("✓ Sample data loaded successfully")
+        except Exception as fallback_error:
+            st.error(f"❌ Critical error: Could not load any data: {str(fallback_error)}")
 
 
 def display_data_quality_metrics():
