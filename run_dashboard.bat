@@ -1,31 +1,11 @@
 @echo off
-echo ========================================
-echo    TransparAI Dashboard - SFLC.in
-echo ========================================
-echo.
-echo Starting TransparAI Procurement Dashboard...
-echo.
-
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo ERROR: Python is not installed or not in PATH
-    echo Please install Python 3.8 or higher from https://python.org
-    pause
-    exit /b 1
+cd /d "%~dp0"
+python -c "import sys; assert sys.version_info[:2] == (3, 13), 'Use Python 3.13'"
+if errorlevel 1 exit /b 1
+if not exist .venv (
+    python -m venv .venv
+    if errorlevel 1 exit /b 1
 )
-
-if not exist "venv" (
-    echo Creating virtual environment...
-    python -m venv venv
-)
-
-echo Activating virtual environment...
-call venv\Scripts\activate.bat
-
-echo Installing dependencies...
-pip install -r requirements.txt
-
-echo Starting Streamlit dashboard...
-streamlit run app.py
-
-pause
+.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt
+if errorlevel 1 exit /b 1
+.venv\Scripts\python.exe -m streamlit run app.py
