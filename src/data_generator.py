@@ -7,24 +7,29 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import json
+import os
+import tempfile
+from pathlib import Path
 from typing import Optional
 
 
 def generate_sample_data(n_records: int = 500, seed: int = 42) -> pd.DataFrame:
     """
     Generate realistic sample procurement data
-    
+
     Args:
         n_records: Number of records to generate
         seed: Random seed for reproducibility
-        
+
     Returns:
         DataFrame with sample procurement data
     """
-    np.random.seed(seed)
-    
+    if not 1 <= n_records <= 10000:
+        raise ValueError('n_records must be between 1 and 10000')
+    rng = np.random.RandomState(seed)
+
     vendors = [
-        "Tata Consultancy Services", "Infosys Limited", "Wipro Limited", 
+        "Tata Consultancy Services", "Infosys Limited", "Wipro Limited",
         "HCL Technologies", "Tech Mahindra", "Larsen & Toubro Infotech",
         "Bharat Electronics Limited", "ITC Limited", "Reliance Industries",
         "Adani Enterprises", "Small Scale Vendor Pvt Ltd", "Medium Enterprise Solutions",
@@ -32,54 +37,55 @@ def generate_sample_data(n_records: int = 500, seed: int = 42) -> pd.DataFrame:
         "Accenture India", "Capgemini India", "IBM India", "Deloitte India",
         "Cognizant", "Mindtree", "KPMG India"
     ]
-    
+
     categories = [
         "IT Infrastructure", "Software Development", "Consulting Services",
         "Hardware Procurement", "Network Security", "Cloud Services",
         "Digital Transformation", "Maintenance & Support", "Training & Development",
         "Data Analytics", "Business Process Outsourcing", "Infrastructure"
     ]
-    
+
     ministries = [
         "Ministry of Electronics & IT", "Ministry of Defence", "Ministry of Health",
         "Ministry of Education", "Ministry of Transport", "Ministry of Finance",
         "Ministry of Railways", "Ministry of Energy", "Ministry of Communications"
     ]
-    
+
     locations = [
         "New Delhi", "Mumbai", "Bangalore", "Chennai", "Kolkata",
         "Hyderabad", "Pune", "Ahmedabad", "Jaipur", "Lucknow"
     ]
-    
+
     data = []
     base_date = datetime.now() - timedelta(days=730)
-    
+
     for i in range(n_records):
-        base_value = np.random.lognormal(14, 1.2)
+        base_value = rng.lognormal(14, 1.2)
         contract_value = max(50000, base_value)
-        
+
         # Add some high-value outliers (5%)
-        if np.random.random() < 0.05:
-            contract_value *= np.random.uniform(5, 20)
-        
-        post_date = base_date + timedelta(days=np.random.randint(0, 730))
-        
+        if rng.random() < 0.05:
+            contract_value *= rng.uniform(5, 20)
+
+        post_date = base_date + timedelta(days=rng.randint(0, 730))
+
         # Processing time (1-90 days normally, with outliers)
-        if np.random.random() < 0.05:
-            processing_days = np.random.randint(91, 365)
+        if rng.random() < 0.05:
+            processing_days = rng.randint(91, 365)
         else:
-            processing_days = np.random.randint(1, 90)
-        
-        award_date = post_date + timedelta(days=processing_days)
-        
-        vendor = np.random.choice(vendors)
-        category = np.random.choice(categories)
-        
+            processing_days = rng.randint(1, 90)
+
+        post_date = min(post_date, datetime.now() - timedelta(days=int(processing_days)))
+        award_date = post_date + timedelta(days=int(processing_days))
+
+        vendor = rng.choice(vendors)
+        category = rng.choice(categories)
+
         # Create some correlations - certain vendors get certain categories
         if vendor in ["Tata Consultancy Services", "Infosys Limited", "Wipro Limited"]:
-            if np.random.random() < 0.7:
-                category = np.random.choice(["IT Infrastructure", "Software Development", "Cloud Services"])
-        
+            if rng.random() < 0.7:
+                category = rng.choice(["IT Infrastructure", "Software Development", "Cloud Services"])
+
         data.append({
             'contract_id': f'CON{100000 + i}',
             'vendor_name': vendor,
@@ -87,41 +93,41 @@ def generate_sample_data(n_records: int = 500, seed: int = 42) -> pd.DataFrame:
             'contract_value': contract_value,
             'post_date': post_date,
             'award_date': award_date,
-            'ministry': np.random.choice(ministries),
-            'location': np.random.choice(locations),
-            'status': np.random.choice(['Completed', 'Ongoing', 'Awarded']),
+            'ministry': rng.choice(ministries),
+            'location': rng.choice(locations),
+            'status': rng.choice(['Completed', 'Ongoing', 'Awarded']),
             'processing_days': processing_days,
-            'estimated_value': contract_value * np.random.uniform(0.8, 1.5),
-            'actual_cost': contract_value * np.random.uniform(0.9, 1.1)
+            'estimated_value': contract_value * rng.uniform(0.8, 1.5),
+            'actual_cost': contract_value * rng.uniform(0.9, 1.1)
         })
-    
+
     df = pd.DataFrame(data)
-    
+
     # Ensure data types
     df['post_date'] = pd.to_datetime(df['post_date'])
     df['award_date'] = pd.to_datetime(df['award_date'])
     df['contract_value'] = df['contract_value'].astype(float)
     df['estimated_value'] = df['estimated_value'].astype(float)
     df['actual_cost'] = df['actual_cost'].astype(float)
-    
+
     return df.sort_values('post_date').reset_index(drop=True)
 
 
 def generate_monthly_data(n_months: int = 24) -> pd.DataFrame:
     """
     Generate aggregated monthly procurement data
-    
+
     Args:
         n_months: Number of months to generate
-        
+
     Returns:
         DataFrame with monthly aggregated data
     """
     monthly_data = []
-    
+
     for month_offset in range(n_months):
         month_date = datetime.now() - timedelta(days=30 * (n_months - month_offset))
-        
+
         monthly_data.append({
             'month': month_date.strftime('%Y-%m'),
             'total_contracts': np.random.randint(50, 200),
@@ -130,17 +136,17 @@ def generate_monthly_data(n_months: int = 24) -> pd.DataFrame:
             'unique_vendors': np.random.randint(10, 40),
             'anomalies_detected': np.random.randint(0, 20)
         })
-    
+
     return pd.DataFrame(monthly_data)
 
 
 def generate_vendor_performance_data(n_vendors: int = 20) -> pd.DataFrame:
     """
     Generate vendor performance metrics
-    
+
     Args:
         n_vendors: Number of vendors
-        
+
     Returns:
         DataFrame with vendor performance data
     """
@@ -150,9 +156,9 @@ def generate_vendor_performance_data(n_vendors: int = 20) -> pd.DataFrame:
         "Vendor K", "Vendor L", "Vendor M", "Vendor N", "Vendor O",
         "Vendor P", "Vendor Q", "Vendor R", "Vendor S", "Vendor T"
     ]
-    
+
     vendor_data = []
-    
+
     for i in range(min(n_vendors, len(vendor_names))):
         vendor_data.append({
             'vendor_name': vendor_names[i],
@@ -165,14 +171,14 @@ def generate_vendor_performance_data(n_vendors: int = 20) -> pd.DataFrame:
             'repeat_contract_count': np.random.randint(0, 20),
             'performance_rating': np.random.choice(['A+', 'A', 'B+', 'B', 'C'])
         })
-    
+
     return pd.DataFrame(vendor_data)
 
 
 def generate_category_analysis_data() -> pd.DataFrame:
     """
     Generate procurement analysis by category
-    
+
     Returns:
         DataFrame with category-wise analysis
     """
@@ -180,9 +186,9 @@ def generate_category_analysis_data() -> pd.DataFrame:
         "IT Services", "Infrastructure", "Consulting", "Hardware",
         "Software", "Services", "Security", "Training"
     ]
-    
+
     category_data = []
-    
+
     for category in categories:
         category_data.append({
             'category': category,
@@ -194,25 +200,29 @@ def generate_category_analysis_data() -> pd.DataFrame:
             'efficiency_score': np.random.uniform(60, 95),
             'anomaly_percentage': np.random.uniform(2, 15)
         })
-    
+
     return pd.DataFrame(category_data)
 
 
-def save_sample_data():
-    """Generate and save sample data"""
+def save_sample_data(output_dir=None):
+    """Serialize both outputs before replacing existing sample files."""
     df = generate_sample_data(500)
-    
-    df.to_csv('data/sample_procurement_data.csv', index=False)
-    
-    json_data = df.to_dict('records', orient='records')
-    with open('data/sample_procurement_data.json', 'w') as f:
-        json.dump(json_data, f, indent=2, default=str)
-    
-    print(f"Generated sample data with {len(df)} records")
-    print(f"Total contract value: INR {df['contract_value'].sum()/1e7:.2f} Crores")
-    print(f"Average contract value: INR {df['contract_value'].mean()/1e5:.2f} Lakhs")
-    print(f"Unique vendors: {df['vendor_name'].nunique()}")
-    print(f"Date range: {df['post_date'].min()} to {df['post_date'].max()}")
+    output = Path(output_dir) if output_dir else Path(__file__).resolve().parents[1] / 'data'
+    csv = df.to_csv(index=False)
+    encoded = json.dumps(df.to_dict(orient='records'), indent=2, default=str)
+    output.mkdir(parents=True, exist_ok=True)
+    staged = []
+    try:
+        for name, content in [('sample_procurement_data.csv', csv), ('sample_procurement_data.json', encoded)]:
+            with tempfile.NamedTemporaryFile(mode='w', dir=output, delete=False, encoding='utf-8') as handle:
+                staged.append((Path(handle.name), output / name))
+                handle.write(content)
+        for temporary, target in staged:
+            os.replace(temporary, target)
+    finally:
+        for temporary, _ in staged:
+            temporary.unlink(missing_ok=True)
+    print(f'Generated {len(df)} sample records in {output}')
 
 
 if __name__ == "__main__":

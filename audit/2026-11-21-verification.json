@@ -1,0 +1,410 @@
+{
+  "date": "2026-11-21",
+  "timezone": "Asia/Kolkata",
+  "baseline_commit": "0e9aff123af08d56589828c4fd8f1163179686e3",
+  "enabled_sources": [
+    "Sample Data",
+    "CSV File"
+  ],
+  "live_mode_enabled": false,
+  "user_decision": "Use CSV and sample data for now",
+  "tests": {
+    "count": 67,
+    "failed": 0,
+    "passed": 67,
+    "skipped": 0,
+    "cases": [
+      {
+        "class": "tests.test_analytics.TestAnomalyDetection",
+        "test": "test_iqr_detection"
+      },
+      {
+        "class": "tests.test_analytics.TestAnomalyDetection",
+        "test": "test_isolation_forest_detection"
+      },
+      {
+        "class": "tests.test_analytics.TestAnomalyDetection",
+        "test": "test_zscore_detection"
+      },
+      {
+        "class": "tests.test_analytics.TestStatisticalAnalysis",
+        "test": "test_confidence_interval"
+      },
+      {
+        "class": "tests.test_analytics.TestStatisticalAnalysis",
+        "test": "test_correlation_matrix"
+      },
+      {
+        "class": "tests.test_analytics.TestStatisticalAnalysis",
+        "test": "test_forecast_accuracy"
+      },
+      {
+        "class": "tests.test_analytics.TestStatisticalAnalysis",
+        "test": "test_normality_test"
+      },
+      {
+        "class": "tests.test_analytics.TestStatisticalAnalysis",
+        "test": "test_ttest_analysis"
+      },
+      {
+        "class": "tests.test_analytics.TestVendorAnalysis",
+        "test": "test_herfindahl_index"
+      },
+      {
+        "class": "tests.test_analytics.TestVendorAnalysis",
+        "test": "test_vendor_concentration_ratio"
+      },
+      {
+        "class": "tests.test_analytics.TestVendorAnalysis",
+        "test": "test_vendor_diversity_index"
+      },
+      {
+        "class": "tests.test_analytics.TestVendorAnalysis",
+        "test": "test_vendor_repeat_analysis"
+      },
+      {
+        "class": "tests.test_analytics.TestCollusionDetection",
+        "test": "test_bid_clustering"
+      },
+      {
+        "class": "tests.test_analytics.TestCollusionDetection",
+        "test": "test_price_patterns"
+      },
+      {
+        "class": "tests.test_analytics.TestEfficiencyAnalysis",
+        "test": "test_competitive_bidding"
+      },
+      {
+        "class": "tests.test_analytics.TestEfficiencyAnalysis",
+        "test": "test_efficiency_score"
+      },
+      {
+        "class": "tests.test_analytics.TestFinancialValuation",
+        "test": "test_irr_calculation"
+      },
+      {
+        "class": "tests.test_analytics.TestFinancialValuation",
+        "test": "test_npv_calculation"
+      },
+      {
+        "class": "tests.test_analytics.TestFinancialValuation",
+        "test": "test_payback_period"
+      },
+      {
+        "class": "tests.test_analytics.TestFinancialValuation",
+        "test": "test_profitability_index"
+      },
+      {
+        "class": "tests.test_analytics.TestROIAnalysis",
+        "test": "test_annualized_roi"
+      },
+      {
+        "class": "tests.test_analytics.TestROIAnalysis",
+        "test": "test_roi_by_vendor"
+      },
+      {
+        "class": "tests.test_analytics.TestROIAnalysis",
+        "test": "test_roi_calculation"
+      },
+      {
+        "class": "tests.test_analytics.TestCostEfficiency",
+        "test": "test_cost_benefit_analysis"
+      },
+      {
+        "class": "tests.test_analytics.TestCostEfficiency",
+        "test": "test_cost_variance"
+      },
+      {
+        "class": "tests.test_analytics.TestDataValidator",
+        "test": "test_clean_contract_data"
+      },
+      {
+        "class": "tests.test_analytics.TestDataValidator",
+        "test": "test_data_quality_report"
+      },
+      {
+        "class": "tests.test_analytics.TestDataValidator",
+        "test": "test_validate_contract_data"
+      },
+      {
+        "class": "tests.test_app_flows",
+        "test": "test_every_page_renders[app.py]"
+      },
+      {
+        "class": "tests.test_app_flows",
+        "test": "test_every_page_renders[dashboard.py]"
+      },
+      {
+        "class": "tests.test_app_flows",
+        "test": "test_quick_actions_navigate[\\U0001f50d Run Anomaly Detection-Anomaly Detection]"
+      },
+      {
+        "class": "tests.test_app_flows",
+        "test": "test_quick_actions_navigate[\\U0001f3e2 Vendor Analysis-Vendor Analysis]"
+      },
+      {
+        "class": "tests.test_app_flows",
+        "test": "test_quick_actions_navigate[\\U0001f4ca Executive Dashboard-Executive Dashboard]"
+      },
+      {
+        "class": "tests.test_app_flows",
+        "test": "test_csv_upload_valid_then_invalid_keeps_previous_data"
+      },
+      {
+        "class": "tests.test_app_flows",
+        "test": "test_settings_change_detector_and_survive_navigation"
+      },
+      {
+        "class": "tests.test_app_flows",
+        "test": "test_live_source_is_disabled_by_default"
+      },
+      {
+        "class": "tests.test_app_flows",
+        "test": "test_live_refresh_keeps_last_success_on_failure"
+      },
+      {
+        "class": "tests.test_dashboard.TestDataProcessor",
+        "test": "test_clean_data"
+      },
+      {
+        "class": "tests.test_dashboard.TestDataProcessor",
+        "test": "test_calculate_metrics"
+      },
+      {
+        "class": "tests.test_dashboard",
+        "test": "test_anomaly_detection"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_invalid_data_is_rejected[change0]"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_invalid_data_is_rejected[change1]"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_invalid_data_is_rejected[change2]"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_invalid_data_is_rejected[change3]"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_invalid_data_is_rejected[change4]"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_invalid_data_is_rejected[change5]"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_invalid_data_is_rejected[change6]"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_invalid_data_is_rejected[change7]"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_normalize_dates_numbers_and_optional_fields"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_bad_dates_are_not_repaired"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_empty_and_conflicting_ids"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_completeness_is_cell_based"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_sample_export_pair"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_sample_generation_does_not_reset_global_random_state"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_masks_and_zero_duration"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_risk_heatmap_is_reproducible_and_aligned"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_vendor_chart_serializes"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_unrelated_awards_are_not_competing_bids"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_bid_pairs_are_bounded_and_grouped"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_rate_limit_records_post_wait_time"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_rate_limiter_concurrent_calls"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_retry_after_is_shared_across_clients"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_api_limit_filter_and_no_sample_fallback"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_ogd_adapter_paginates_and_maps_fields"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_http_error_does_not_log_secrets"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_no_fabricated_gem_endpoint"
+      },
+      {
+        "class": "tests.test_regressions",
+        "test": "test_financial_known_values_and_irr_error"
+      }
+    ]
+  },
+  "coverage": {
+    "scope": "app.py, dashboard.py, src, utils; tests excluded from this summary",
+    "covered_statements": 1151,
+    "total_statements": 1363,
+    "percentage": 84.45,
+    "files": {
+      "app.py": {
+        "covered_lines": 4,
+        "num_statements": 4,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100"
+      },
+      "dashboard.py": {
+        "covered_lines": 444,
+        "num_statements": 494,
+        "percent_covered": 89.87854251012146,
+        "percent_covered_display": "90",
+        "missing_lines": 50,
+        "excluded_lines": 0,
+        "percent_statements_covered": 89.87854251012146,
+        "percent_statements_covered_display": "90"
+      },
+      "src/analytics.py": {
+        "covered_lines": 169,
+        "num_statements": 210,
+        "percent_covered": 80.47619047619048,
+        "percent_covered_display": "80",
+        "missing_lines": 41,
+        "excluded_lines": 0,
+        "percent_statements_covered": 80.47619047619048,
+        "percent_statements_covered_display": "80"
+      },
+      "src/api_integration.py": {
+        "covered_lines": 224,
+        "num_statements": 254,
+        "percent_covered": 88.18897637795276,
+        "percent_covered_display": "88",
+        "missing_lines": 30,
+        "excluded_lines": 0,
+        "percent_statements_covered": 88.18897637795276,
+        "percent_statements_covered_display": "88"
+      },
+      "src/configuration.py": {
+        "covered_lines": 8,
+        "num_statements": 18,
+        "percent_covered": 44.44444444444444,
+        "percent_covered_display": "44",
+        "missing_lines": 10,
+        "excluded_lines": 0,
+        "percent_statements_covered": 44.44444444444444,
+        "percent_statements_covered_display": "44"
+      },
+      "src/data_generator.py": {
+        "covered_lines": 62,
+        "num_statements": 79,
+        "percent_covered": 78.48101265822785,
+        "percent_covered_display": "78",
+        "missing_lines": 17,
+        "excluded_lines": 0,
+        "percent_statements_covered": 78.48101265822785,
+        "percent_statements_covered_display": "78"
+      },
+      "src/financial_analysis.py": {
+        "covered_lines": 108,
+        "num_statements": 130,
+        "percent_covered": 83.07692307692308,
+        "percent_covered_display": "83",
+        "missing_lines": 22,
+        "excluded_lines": 0,
+        "percent_statements_covered": 83.07692307692308,
+        "percent_statements_covered_display": "83"
+      },
+      "src/visualizations.py": {
+        "covered_lines": 106,
+        "num_statements": 134,
+        "percent_covered": 79.1044776119403,
+        "percent_covered_display": "79",
+        "missing_lines": 28,
+        "excluded_lines": 0,
+        "percent_statements_covered": 79.1044776119403,
+        "percent_statements_covered_display": "79"
+      },
+      "utils/helpers.py": {
+        "covered_lines": 26,
+        "num_statements": 40,
+        "percent_covered": 65.0,
+        "percent_covered_display": "65",
+        "missing_lines": 14,
+        "excluded_lines": 0,
+        "percent_statements_covered": 65.0,
+        "percent_statements_covered_display": "65"
+      }
+    }
+  },
+  "server_smoke": {
+    "server_started": true,
+    "health_status": 200,
+    "health_body": "ok",
+    "root_status": 200
+  },
+  "dependency_audit": {
+    "packages_checked_on_macos": 45,
+    "known_vulnerabilities": 0,
+    "platform_limit": "Platform-conditional Windows and Linux packages were not installed on macOS. Locks were resolved universally for Python 3.13."
+  },
+  "runtime": {
+    "python": "3.13.14",
+    "os": "macOS",
+    "runtime_lock": "requirements.txt",
+    "test_lock": "requirements-dev.txt"
+  },
+  "not_verified": [
+    "Authorized live service integration (disabled at user request)",
+    "Docker image build (local Docker daemon unavailable)",
+    "Hosted sustained load and multiple server processes",
+    "Mobile layout and accessibility",
+    "Windows execution",
+    "Browser download completion"
+  ]
+}

@@ -1,621 +1,309 @@
-"""
-Real API Integration Module for TransparAI
-Integrates with multiple government API endpoints
-"""
-
-import requests
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
-import json
-import time
+"""Configured government data clients and a shared validation boundary."""
+from collections import deque
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from functools import wraps
-import warnings
+import logging
+import threading
+import time
+from urllib.parse import quote, urlparse
 
-warnings.filterwarnings('ignore')
+import numpy as np
+import pandas as pd
+import requests
+
+logger = logging.getLogger(__name__)
+MAX_RECORDS = 10_000
 
 
 class RateLimiter:
-    """Rate limiter decorator for API calls"""
-    
-    def __init__(self, calls: int, period: int):
-        """
-        Initialize rate limiter
-        
-        Args:
-            calls: Number of calls allowed
-            period: Time period in seconds
-        """
-        self.calls = calls
-        self.period = period
-        self.calls_made = []
-    
+    """Thread-safe rolling window within one server process."""
+    def __init__(self, calls, period):
+        if calls < 1 or period <= 0:
+            raise ValueError('Rate limit must be positive')
+        self.calls, self.period = calls, period
+        self.calls_made, self.lock = deque(), threading.Lock()
+
     def __call__(self, func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            now = time.time()
-            self.calls_made = [t for t in self.calls_made if t > now - self.period]
-            
-            if len(self.calls_made) >= self.calls:
-                sleep_time = self.period - (now - self.calls_made[0])
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-            
-            self.calls_made.append(now)
+            while True:
+                with self.lock:
+                    now = time.monotonic()
+                    while self.calls_made and self.calls_made[0] <= now - self.period:
+                        self.calls_made.popleft()
+                    if len(self.calls_made) < self.calls:
+                        self.calls_made.append(now)
+                        break
+                    delay = self.period - (now - self.calls_made[0])
+                time.sleep(max(delay, 0))
             return func(*args, **kwargs)
-        
         return wrapper
 
 
-class GemGovAPI:
-    """Government e-Marketplace (GeM) API Integration"""
-    
-    BASE_URL = "https://api.gem.gov.in/public/api/v1"
-    
-    def __init__(self, api_key: Optional[str] = None):
-        """
-        Initialize GeM API client
-        
-        Args:
-            api_key: Optional API key for authentication
-        """
-        self.api_key = api_key
-        self.session = requests.Session()
-        self.headers = {
-            'User-Agent': 'TransparAI-SFLC.in-Hackathon',
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
+class _JSONClient:
+    _cooldowns = {}
+    _cooldown_lock = threading.Lock()
+
+    def __init__(self):
+        self.session, self.last_error = requests.Session(), None
+
+    def _get(self, url, *, params=None, headers=None):
+        self.last_error = None
+        host = urlparse(url).hostname
+        with self._cooldown_lock:
+            if time.monotonic() < self._cooldowns.get(host, 0):
+                self.last_error = 'Data service is in its requested retry cooldown'
+                return None
+        try:
+            response = self.session.get(url, params=params, headers=headers,
+                                        timeout=(5, 20), allow_redirects=False)
+            if response.status_code != 200:
+                self.last_error = f'HTTP {response.status_code} from configured data service'
+                if response.status_code == 429:
+                    self.last_error += '; retry after the provider limit'
+                    retry = response.headers.get('Retry-After', '60')
+                    try:
+                        delay = float(retry)
+                    except ValueError:
+                        try:
+                            delay = (parsedate_to_datetime(retry) - datetime.now(timezone.utc)).total_seconds()
+                        except (TypeError, ValueError, OverflowError):
+                            delay = 60
+                    if not np.isfinite(delay):
+                        delay = 60
+                    with self._cooldown_lock:
+                        self._cooldowns[host] = time.monotonic() + max(delay, 1)
+                logger.warning(self.last_error)
+                return None
+            payload = response.json()
+            if not isinstance(payload, dict) or payload.get('error'):
+                self.last_error = 'Data service returned an error or unsupported response'
+                return None
+            return payload
+        except (requests.RequestException, ValueError):
+            # Exception text can contain API keys in query strings.
+            self.last_error = 'Could not read the data service; check connectivity and access'
+            logger.warning(self.last_error)
+            return None
+
+
+class GemGovAPI(_JSONClient):
+    """Adapter for an operator-provided, authorized GeM-compatible API."""
+    def __init__(self, api_key=None, base_url=None):
+        super().__init__()
+        self.base_url = (base_url or '').rstrip('/')
+        parsed = urlparse(self.base_url)
+        if self.base_url and (parsed.scheme != 'https' or not parsed.hostname or
+                              parsed.username or parsed.query or parsed.fragment):
+            raise ValueError('GeM base URL must use HTTPS without credentials or query parameters')
+        self.headers = {'Accept': 'application/json', 'User-Agent': 'TransparAI/1.0'}
         if api_key:
             self.headers['Authorization'] = f'Bearer {api_key}'
-    
+
+    def _request(self, path, params=None):
+        if not self.base_url:
+            self.last_error = 'No authorized GeM base URL configured'
+            return None
+        return self._get(f'{self.base_url}/{path}', params=params, headers=self.headers)
+
     @RateLimiter(calls=10, period=60)
-    def get_contracts(self, filters: Optional[Dict] = None,
-                     page: int = 1, limit: int = 100) -> Optional[Dict]:
-        """
-        Fetch contracts from GeM API
-        
-        Args:
-            filters: Dictionary with filter parameters
-            page: Page number
-            limit: Records per page
-            
-        Returns:
-            JSON response with contract data
-        """
-        try:
-            params = {
-                'page': page,
-                'limit': limit
-            }
-            
-            if filters:
-                params.update(filters)
-            
-            response = self.session.get(
-                f"{self.BASE_URL}/contracts",
-                headers=self.headers,
-                params=params,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                return response.json()
-            else:
-                print(f"GeM API Error: {response.status_code}")
-                return None
-                
-        except Exception as e:
-            print(f"GeM API Request Error: {str(e)}")
-            return None
-    
+    def get_contracts(self, filters=None, page=1, limit=100):
+        return self._request('contracts', {**(filters or {}), 'page': page, 'limit': limit})
+
     @RateLimiter(calls=10, period=60)
-    def get_contract_details(self, contract_id: str) -> Optional[Dict]:
-        """
-        Fetch specific contract details
-        
-        Args:
-            contract_id: Contract ID
-            
-        Returns:
-            Contract details
-        """
-        try:
-            response = self.session.get(
-                f"{self.BASE_URL}/contracts/{contract_id}",
-                headers=self.headers,
-                timeout=30
-            )
-            
-            return response.json() if response.status_code == 200 else None
-            
-        except Exception as e:
-            print(f"Error fetching contract {contract_id}: {str(e)}")
-            return None
-    
+    def get_contract_details(self, contract_id):
+        return self._request(f'contracts/{quote(str(contract_id), safe="")}')
+
     @RateLimiter(calls=5, period=60)
-    def search_vendors(self, vendor_name: str) -> Optional[Dict]:
-        """
-        Search for vendors
-        
-        Args:
-            vendor_name: Vendor name to search
-            
-        Returns:
-            Search results
-        """
-        try:
-            response = self.session.get(
-                f"{self.BASE_URL}/vendors/search",
-                headers=self.headers,
-                params={'name': vendor_name},
-                timeout=30
-            )
-            
-            return response.json() if response.status_code == 200 else None
-            
-        except Exception as e:
-            print(f"Error searching vendors: {str(e)}")
-            return None
-    
+    def search_vendors(self, vendor_name):
+        return self._request('vendors/search', {'name': vendor_name})
+
     @RateLimiter(calls=5, period=60)
-    def get_vendor_details(self, vendor_id: str) -> Optional[Dict]:
-        """
-        Fetch vendor details
-        
-        Args:
-            vendor_id: Vendor ID
-            
-        Returns:
-            Vendor details
-        """
-        try:
-            response = self.session.get(
-                f"{self.BASE_URL}/vendors/{vendor_id}",
-                headers=self.headers,
-                timeout=30
-            )
-            
-            return response.json() if response.status_code == 200 else None
-            
-        except Exception as e:
-            print(f"Error fetching vendor {vendor_id}: {str(e)}")
-            return None
+    def get_vendor_details(self, vendor_id):
+        return self._request(f'vendors/{quote(str(vendor_id), safe="")}')
 
 
-class DataGovInAPI:
-    """Data.gov.in API Integration"""
-    
-    BASE_URL = "https://api.data.gov.in/resource"
-    
-    def __init__(self, api_key: str):
-        """
-        Initialize Data.gov.in API client
-        
-        Args:
-            api_key: API key for authentication
-        """
-        self.api_key = api_key
-        self.session = requests.Session()
-        self.headers = {
-            'User-Agent': 'TransparAI-SFLC.in-Hackathon',
-            'Accept': 'application/json'
-        }
-    
+class DataGovInAPI(_JSONClient):
+    BASE_URL = 'https://api.data.gov.in/resource'
+
+    def __init__(self, api_key, resource_id=None, field_map=None):
+        super().__init__()
+        self.api_key, self.resource_id = api_key, resource_id
+        self.field_map = field_map or {}
+
     @RateLimiter(calls=5, period=60)
-    def get_resource(self, resource_id: str, filters: Optional[Dict] = None,
-                    limit: int = 100, offset: int = 0) -> Optional[Dict]:
-        """
-        Fetch data from government resource
-        
-        Args:
-            resource_id: Resource ID
-            filters: Optional filters
-            limit: Records limit
-            offset: Record offset
-            
-        Returns:
-            Resource data
-        """
-        try:
-            params = {
-                'api-key': self.api_key,
-                'format': 'json',
-                'limit': limit,
-                'offset': offset
-            }
-            
-            if filters:
-                params.update(filters)
-            
-            response = self.session.get(
-                f"{self.BASE_URL}/{resource_id}",
-                headers=self.headers,
-                params=params,
-                timeout=30
-            )
-            
-            return response.json() if response.status_code == 200 else None
-            
-        except Exception as e:
-            print(f"Data.gov.in API Error: {str(e)}")
+    def get_resource(self, resource_id, filters=None, limit=100, offset=0):
+        if not self.api_key or not resource_id:
+            self.last_error = 'Data.gov.in needs an API key and a procurement resource ID'
             return None
-
-
-class ProcurementDataAggregator:
-    """Aggregates data from multiple sources"""
-    
-    def __init__(self, gem_api: Optional[GemGovAPI] = None,
-                 datagov_api: Optional[DataGovInAPI] = None):
-        """
-        Initialize data aggregator
-        
-        Args:
-            gem_api: GeM API client
-            datagov_api: Data.gov.in API client
-        """
-        self.gem_api = gem_api
-        self.datagov_api = datagov_api
-    
-    def fetch_and_aggregate_data(self, start_date: Optional[datetime] = None,
-                                end_date: Optional[datetime] = None,
-                                max_records: int = 500) -> Tuple[pd.DataFrame, str, List[str]]:
-        """
-        Fetch and aggregate data from all sources with fallback to sample data
-        
-        Args:
-            start_date: Start date for filtering
-            end_date: End date for filtering
-            max_records: Maximum records to fetch
-            
-        Returns:
-            Tuple of (DataFrame, source_name, error_messages)
-        """
-        all_data = []
-        errors = []
-        sources_tried = []
-        
-        # Try GeM API first (highest priority)
-        if self.gem_api:
-            print("Attempting to fetch data from GeM API...")
-            sources_tried.append("GeM API")
-            gem_data = self._fetch_from_gem(max_records)
-            if gem_data is not None and not gem_data.empty:
-                all_data.append(gem_data)
-                print(f"[OK] Successfully fetched {len(gem_data)} records from GeM API")
-            else:
-                errors.append("GeM API: No data returned or connection failed")
-                print("[WARNING] GeM API failed to return data")
-        
-        # Try Data.gov.in API (second priority)
-        if self.datagov_api:
-            print("Attempting to fetch data from Data.gov.in API...")
-            sources_tried.append("Data.gov.in API")
-            datagov_data = self._fetch_from_datagov(max_records)
-            if datagov_data is not None and not datagov_data.empty:
-                all_data.append(datagov_data)
-                print(f"[OK] Successfully fetched {len(datagov_data)} records from Data.gov.in")
-            else:
-                errors.append("Data.gov.in API: No data returned or connection failed")
-                print("[WARNING] Data.gov.in API failed to return data")
-        
-        # Try additional procurement data sources
-        print("Attempting to fetch from additional government sources...")
-        sources_tried.append("Additional Sources")
-        additional_data = self._fetch_from_additional_sources(max_records)
-        if additional_data is not None and not additional_data.empty:
-            all_data.append(additional_data)
-            print(f"[OK] Successfully fetched {len(additional_data)} records from additional sources")
-        else:
-            errors.append("Additional Sources: No data returned or connection failed")
-            print("[WARNING] Additional sources failed to return data")
-        
-        # If we have data from any source, process and return it
-        if all_data:
-            combined_df = pd.concat(all_data, ignore_index=True)
-            
-            # Filter by date if provided
-            if start_date and end_date:
-                if 'post_date' in combined_df.columns:
-                    combined_df = combined_df[
-                        (combined_df['post_date'] >= start_date) &
-                        (combined_df['post_date'] <= end_date)
-                    ]
-            
-            # Determine source name based on what worked
-            if len(all_data) > 1:
-                source_name = f"Multiple Government APIs ({len(all_data)} sources)"
-            else:
-                source_name = "Government APIs"
-            
-            print(f"[SUCCESS] Total records collected: {len(combined_df)} from {len(all_data)} source(s)")
-            return combined_df, source_name, errors
-        
-        # Fallback to sample data if all APIs failed
-        print(f"[WARNING] All {len(sources_tried)} API source(s) failed. Falling back to sample data...")
-        errors.append(f"All API endpoints failed: {', '.join(sources_tried)}")
-        errors.append("Automatically switched to sample data for demonstration")
-        
-        try:
-            from src.data_generator import generate_sample_data
-            sample_df = generate_sample_data(n_records=max_records)
-            print(f"[OK] Generated {len(sample_df)} sample records as fallback")
-            return sample_df, "Sample Data (API Fallback)", errors
-        except Exception as e:
-            errors.append(f"Failed to generate sample data: {str(e)}")
-            return pd.DataFrame(), "No Data", errors
-    
-    def _fetch_from_gem(self, max_records: int) -> Optional[pd.DataFrame]:
-        """Fetch data from GeM API with comprehensive error handling"""
-        try:
-            records = []
-            page = 1
-            max_pages = 10  # Prevent infinite loops
-            
-            while len(records) < max_records and page <= max_pages:
-                try:
-                    response = self.gem_api.get_contracts(page=page, limit=100)
-                    
-                    if not response:
-                        print(f"GeM API: No response received for page {page}")
-                        break
-                    
-                    # Handle different response formats
-                    data_key = None
-                    for key in ['records', 'data', 'contracts', 'results']:
-                        if key in response:
-                            data_key = key
-                            break
-                    
-                    if not data_key:
-                        print(f"GeM API: Unexpected response format: {list(response.keys())}")
-                        break
-                    
-                    page_records = response.get(data_key, [])
-                    if not page_records:
-                        break
-                    
-                    for record in page_records:
-                        try:
-                            # Flexible field mapping
-                            contract_id = record.get('id') or record.get('contract_id') or record.get('contractId') or f'GEM_{len(records)}'
-                            vendor_name = record.get('vendor_name') or record.get('vendorName') or record.get('vendor') or 'Unknown Vendor'
-                            value = record.get('value') or record.get('contract_value') or record.get('contractValue') or record.get('amount') or 0
-                            
-                            records.append({
-                                'contract_id': str(contract_id),
-                                'vendor_name': str(vendor_name),
-                                'contract_value': float(value),
-                                'post_date': pd.to_datetime(record.get('post_date') or record.get('postDate') or datetime.now(), errors='coerce'),
-                                'award_date': pd.to_datetime(record.get('award_date') or record.get('awardDate') or datetime.now(), errors='coerce'),
-                                'category': record.get('category') or record.get('type') or 'Uncategorized',
-                                'status': record.get('status') or 'Active',
-                                'ministry': record.get('ministry') or record.get('department') or 'N/A',
-                                'location': record.get('location') or record.get('state') or 'N/A',
-                                'source': 'GeM'
-                            })
-                        except Exception as e:
-                            print(f"GeM API: Error processing record: {str(e)}")
-                            continue
-                    
-                    if len(records) >= max_records:
-                        break
-                    
-                    page += 1
-                    
-                except Exception as e:
-                    print(f"GeM API: Error fetching page {page}: {str(e)}")
-                    break
-            
-            if records:
-                df = pd.DataFrame(records)
-                # Calculate processing days
-                df['processing_days'] = (df['award_date'] - df['post_date']).dt.days
-                df['processing_days'] = df['processing_days'].fillna(0).abs()
-                return df
-            else:
-                print("GeM API: No records collected")
-                return None
-            
-        except Exception as e:
-            print(f"GeM API: Critical error in _fetch_from_gem: {str(e)}")
-            return None
-    
-    def _fetch_from_datagov(self, max_records: int) -> Optional[pd.DataFrame]:
-        """Fetch data from Data.gov.in general API"""
-        try:
-            # This uses the general Data.gov.in API client if configured
-            # For now, return None and rely on additional_sources method
-            return None
-            
-        except Exception as e:
-            print(f"Error fetching from Data.gov.in: {str(e)}")
-            return None
-    
-    def _fetch_from_additional_sources(self, max_records: int) -> Optional[pd.DataFrame]:
-        """
-        Fetch data from additional government procurement sources
-        
-        This method tries multiple alternative sources:
-        - Data.gov.in procurement datasets
-        - eProcurement portal
-        - CPPP (Central Public Procurement Portal)
-        
-        Args:
-            max_records: Maximum records to fetch
-            
-        Returns:
-            DataFrame with procurement records or None
-        """
-        all_records = []
-        
-        # Try Data.gov.in specific procurement dataset
-        try:
-            import json
-            headers = {
-                'User-Agent': 'TransparAI-SFLC.in',
-                'Accept': 'application/json'
-            }
-            
-            # Try data.gov.in procurement resource
-            # Resource ID: 9ef84268-d588-465a-a308-a864a43d0070 (example procurement data)
-            try:
-                response = requests.get(
-                    'https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070',
-                    headers=headers,
-                    params={
-                        'format': 'json',
-                        'limit': min(max_records, 100),
-                        'offset': 0
-                    },
-                    timeout=15
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    records = data.get('records', [])
-                    
-                    for record in records[:max_records]:
-                        try:
-                            all_records.append({
-                                'contract_id': record.get('tender_id') or record.get('id') or f'DGI_{len(all_records)}',
-                                'vendor_name': record.get('vendor') or record.get('contractor') or 'Unknown Vendor',
-                                'contract_value': float(record.get('value') or record.get('contract_value') or record.get('amount') or 0),
-                                'post_date': pd.to_datetime(record.get('publish_date') or record.get('date'), errors='coerce'),
-                                'award_date': pd.to_datetime(record.get('award_date') or record.get('closing_date'), errors='coerce'),
-                                'category': record.get('category') or record.get('type') or 'General',
-                                'status': record.get('status') or 'Active',
-                                'ministry': record.get('department') or record.get('ministry') or 'N/A',
-                                'location': record.get('location') or record.get('state') or 'N/A',
-                                'source': 'Data.gov.in'
-                            })
-                        except Exception as e:
-                            continue
-                    
-                    if records:
-                        print(f"Data.gov.in: Fetched {len(records)} records from procurement dataset")
-                else:
-                    print(f"Data.gov.in: API returned status {response.status_code}")
-                    
-            except Exception as e:
-                print(f"Data.gov.in specific dataset error: {str(e)}")
-            
-        except Exception as e:
-            print(f"Additional sources error: {str(e)}")
-        
-        # Convert to DataFrame if we have records
-        if all_records:
-            df = pd.DataFrame(all_records)
-            df['post_date'] = pd.to_datetime(df['post_date'], errors='coerce')
-            df['award_date'] = pd.to_datetime(df['award_date'], errors='coerce')
-            df['processing_days'] = (df['award_date'] - df['post_date']).dt.days
-            df['processing_days'] = df['processing_days'].fillna(0).abs()
-            return df
-        
-        return None
+        params = {**(filters or {}), 'api-key': self.api_key, 'format': 'json',
+                  'limit': limit, 'offset': offset}
+        return self._get(f'{self.BASE_URL}/{quote(str(resource_id), safe="")}',
+                         params=params, headers={'Accept': 'application/json'})
 
 
 class DataValidator:
-    """Validates and cleans procurement data"""
-    
+    REQUIRED_FIELDS = ['contract_id', 'vendor_name', 'contract_value', 'post_date', 'award_date']
+
     @staticmethod
-    def validate_contract_data(df: pd.DataFrame) -> Tuple[bool, List[str]]:
-        """
-        Validate contract data quality
-        
-        Args:
-            df: DataFrame to validate
-            
-        Returns:
-            Tuple of (is_valid, list of errors)
-        """
+    def clean_contract_data(df):
+        """Normalize types without fabricating missing values or valid timelines."""
+        out = df.copy()
+        for col in ['post_date', 'award_date', 'contract_date']:
+            if col in out:
+                out[col] = pd.to_datetime(out[col], errors='coerce', utc=True, format='mixed').dt.tz_localize(None)
+        for col in ['contract_value', 'estimated_value', 'actual_cost', 'bid_price', 'quantity']:
+            if col in out:
+                out[col] = pd.to_numeric(out[col], errors='coerce')
+        for col in ['contract_id', 'vendor_name', 'tender_id', 'item_id']:
+            if col in out:
+                out[col] = out[col].astype('string').str.strip().replace('', pd.NA)
+        for col in ['category', 'ministry', 'location']:
+            out[col] = out[col].fillna('Unspecified').astype(str) if col in out else 'Unspecified'
+        if 'post_date' in out and 'award_date' in out:
+            days = (out.award_date - out.post_date).dt.total_seconds() / 86400
+            out['processing_days'] = days.where(days >= 0)
+        return out.drop_duplicates().reset_index(drop=True)
+
+    @staticmethod
+    def validate_contract_data(df):
         errors = []
-        
-        required_fields = ['contract_id', 'vendor_name', 'contract_value',
-                          'post_date', 'award_date']
-        
-        for field in required_fields:
-            if field not in df.columns:
-                errors.append(f"Missing required field: {field}")
-            elif df[field].isnull().sum() > 0:
-                errors.append(f"Missing values in field: {field}")
-        
-        if 'contract_value' in df.columns:
-            if (df['contract_value'] < 0).any():
-                errors.append("Negative contract values found")
-        
-        if 'post_date' in df.columns and 'award_date' in df.columns:
-            invalid_dates = (df['award_date'] < df['post_date']).sum()
-            if invalid_dates > 0:
-                errors.append(f"Award date before post date in {invalid_dates} records")
-        
-        return len(errors) == 0, errors
-    
+        if df.empty:
+            errors.append('Dataset has no records')
+        if len(df) > MAX_RECORDS:
+            errors.append(f'Dataset exceeds the {MAX_RECORDS:,} record limit')
+        for col in DataValidator.REQUIRED_FIELDS:
+            if col not in df:
+                errors.append(f'Missing required field: {col}')
+            elif df[col].isna().any() or df[col].astype('string').str.strip().eq('').any():
+                errors.append(f'Missing values in field: {col}')
+        if 'contract_value' in df:
+            values = pd.to_numeric(df.contract_value, errors='coerce')
+            if (~np.isfinite(values)).any() or (values < 0).any():
+                errors.append('Contract values must be finite, nonnegative numbers')
+        if 'contract_id' in df and df.contract_id.duplicated().any():
+            errors.append('Duplicate contract IDs found; resolve conflicting records')
+        if 'post_date' in df and 'award_date' in df:
+            post = pd.to_datetime(df.post_date, errors='coerce', utc=True, format='mixed')
+            award = pd.to_datetime(df.award_date, errors='coerce', utc=True, format='mixed')
+            if post.isna().any() or award.isna().any():
+                errors.append('Invalid or missing post/award dates')
+            if (award < post).any():
+                errors.append('Award date before post date')
+        return not errors, errors
+
     @staticmethod
-    def clean_contract_data(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Clean and standardize contract data
-        
-        Args:
-            df: Raw DataFrame
-            
-        Returns:
-            Cleaned DataFrame
-        """
-        df_clean = df.copy()
-        
-        # Convert dates
-        date_columns = ['post_date', 'award_date', 'contract_date']
-        for col in date_columns:
-            if col in df_clean.columns:
-                df_clean[col] = pd.to_datetime(df_clean[col], errors='coerce')
-        
-        # Clean numeric columns
-        numeric_columns = ['contract_value', 'estimated_value', 'bid_price']
-        for col in numeric_columns:
-            if col in df_clean.columns:
-                df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
-        
-        # Remove duplicates
-        df_clean = df_clean.drop_duplicates()
-        
-        # Remove rows with critical missing values
-        required_fields = ['contract_id', 'vendor_name', 'contract_value']
-        df_clean = df_clean.dropna(subset=required_fields)
-        
-        # Calculate processing days if dates available
-        if 'post_date' in df_clean.columns and 'award_date' in df_clean.columns:
-            df_clean['processing_days'] = (
-                df_clean['award_date'] - df_clean['post_date']
-            ).dt.days
-        
-        return df_clean
-    
+    def prepare_contract_data(df):
+        cleaned = DataValidator.clean_contract_data(df)
+        valid, errors = DataValidator.validate_contract_data(cleaned)
+        if not valid:
+            raise ValueError('; '.join(errors))
+        return cleaned
+
     @staticmethod
-    def get_data_quality_report(df: pd.DataFrame) -> Dict:
-        """
-        Generate data quality report
-        
-        Args:
-            df: DataFrame to analyze
-            
-        Returns:
-            Dictionary with quality metrics
-        """
-        report = {
-            'total_records': len(df),
-            'duplicate_records': df.duplicated().sum(),
-            'unique_vendors': df['vendor_name'].nunique() if 'vendor_name' in df.columns else 0,
-            'date_range': None,
-            'missing_values': df.isnull().sum().to_dict(),
-            'data_types': df.dtypes.to_dict()
-        }
-        
-        if 'post_date' in df.columns:
-            report['date_range'] = {
-                'start': df['post_date'].min().isoformat() if df['post_date'].min() else None,
-                'end': df['post_date'].max().isoformat() if df['post_date'].max() else None
-            }
-        
-        return report
+    def get_data_quality_report(df):
+        dates = pd.to_datetime(df.get('post_date', pd.Series(dtype='datetime64[ns]')),
+                               errors='coerce', utc=True, format='mixed').dropna()
+        return {'total_records': len(df), 'duplicate_records': int(df.duplicated().sum()),
+                'unique_vendors': df.vendor_name.nunique() if 'vendor_name' in df else 0,
+                'date_range': {'start': dates.min().isoformat(), 'end': dates.max().isoformat()} if len(dates) else None,
+                'missing_values': df.isna().sum().to_dict(), 'data_types': df.dtypes.to_dict(),
+                'completeness_pct': float(df.notna().to_numpy().mean() * 100) if df.size else 0.0}
+
+
+class ProcurementDataAggregator:
+    """Read configured sources. Never substitute synthetic data for live data."""
+    def __init__(self, gem_api=None, datagov_api=None):
+        self.gem_api, self.datagov_api = gem_api, datagov_api
+
+    @staticmethod
+    def _records(payload):
+        if isinstance(payload, dict):
+            for key in ['records', 'data', 'contracts', 'results']:
+                if isinstance(payload.get(key), list):
+                    return payload[key]
+        return []
+
+    @staticmethod
+    def _normalize(records, source, field_map=None):
+        aliases = {'contract_id': ['contract_id', 'id', 'contractId', 'tender_id'],
+                   'vendor_name': ['vendor_name', 'vendorName', 'vendor', 'contractor'],
+                   'contract_value': ['contract_value', 'contractValue', 'value', 'amount'],
+                   'post_date': ['post_date', 'postDate', 'publish_date'],
+                   'award_date': ['award_date', 'awardDate'],
+                   'ministry': ['ministry', 'department']}
+        rows = []
+        for record in records:
+            if not isinstance(record, dict):
+                raise ValueError('Data service returned an invalid record')
+            row = {key: record.get(key) for key in ['category', 'ministry', 'location',
+                'tender_id', 'item_id', 'bid_price', 'quantity', 'price_basis']}
+            for col, candidates in aliases.items():
+                names = [field_map[col]] if field_map and col in field_map else candidates
+                row[col] = next((record[n] for n in names if record.get(n) is not None), None)
+            for col, name in (field_map or {}).items():
+                row[col] = record.get(name)
+            row['source'] = source
+            rows.append(row)
+        return DataValidator.clean_contract_data(pd.DataFrame(rows)) if rows else pd.DataFrame()
+
+    def _fetch_from_gem(self, max_records):
+        records, seen = [], set()
+        for page in range(1, (max_records + 99) // 100 + 1):
+            payload = self.gem_api.get_contracts(page=page, limit=min(100, max_records-len(records)))
+            if payload is None:
+                raise ValueError(getattr(self.gem_api, 'last_error', None) or 'GeM request failed')
+            batch = self._records(payload)
+            if not batch or repr(batch) in seen:
+                break
+            seen.add(repr(batch))
+            records.extend(batch[:max_records-len(records)])
+            if len(records) >= max_records:
+                break
+        return self._normalize(records, 'GeM')
+
+    def _fetch_from_datagov(self, max_records):
+        client, records = self.datagov_api, []
+        while len(records) < max_records:
+            limit = min(1000, max_records-len(records))
+            payload = client.get_resource(client.resource_id, limit=limit, offset=len(records))
+            if payload is None:
+                raise ValueError(client.last_error or 'Data.gov.in request failed')
+            batch = self._records(payload)
+            records.extend(batch[:limit])
+            if len(batch) < limit:
+                break
+        return self._normalize(records, 'Data.gov.in', client.field_map)
+
+    def fetch_and_aggregate_data(self, start_date=None, end_date=None, max_records=500):
+        if not 1 <= max_records <= MAX_RECORDS:
+            raise ValueError(f'max_records must be between 1 and {MAX_RECORDS}')
+        frames, errors = [], []
+        for name, client, fetch in [('GeM', self.gem_api, self._fetch_from_gem),
+                                    ('Data.gov.in', self.datagov_api, self._fetch_from_datagov)]:
+            if client is None:
+                continue
+            try:
+                frame = fetch(max_records)
+                if frame.empty:
+                    errors.append(f'{name}: No records returned')
+                    continue
+                frames.append(DataValidator.prepare_contract_data(frame))
+            except ValueError as exc:
+                errors.append(f'{name}: {exc}')
+        if not frames:
+            return pd.DataFrame(), 'No live data', errors or ['No authorized data source configured']
+        combined = pd.concat(frames, ignore_index=True)
+        compare = combined.drop(columns=['source'], errors='ignore')
+        combined = combined.loc[~compare.duplicated()].copy()
+        if combined.contract_id.duplicated().any():
+            return pd.DataFrame(), 'No live data', errors + ['Conflicting contract IDs across sources']
+        if start_date is not None:
+            combined = combined[combined.post_date >= pd.to_datetime(start_date, utc=True).tz_localize(None)]
+        if end_date is not None:
+            combined = combined[combined.post_date <= pd.to_datetime(end_date, utc=True).tz_localize(None)]
+        combined = combined.head(max_records).reset_index(drop=True)
+        if combined.empty:
+            return combined, 'No live data', errors + ['No records match the selected date range']
+        return combined, ' + '.join(sorted(combined.source.unique())), errors

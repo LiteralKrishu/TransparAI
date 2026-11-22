@@ -1,0 +1,9 @@
+.git
+.env*
+.streamlit/secrets.toml
+venv
+.venv
+**/__pycache__
+.pytest_cache
+.DS_Store
+audit

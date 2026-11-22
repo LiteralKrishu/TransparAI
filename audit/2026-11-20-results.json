@@ -1,0 +1,741 @@
+{
+  "audit_date_local": "2026-11-20",
+  "timezone": "Asia/Kolkata",
+  "reviewed_commit": "0e9aff123af08d56589828c4fd8f1163179686e3",
+  "environment": {
+    "platform": "macOS",
+    "python": "3.13.14",
+    "installation": "temporary environment; current requirements resolved without pins"
+  },
+  "existing_suite": {
+    "tests": 31,
+    "passed": 29,
+    "failed": [
+      {
+        "class": "tests.test_analytics.TestCollusionDetection",
+        "name": "test_bid_clustering",
+        "message": "TypeError: CollusionDetection.detect_bid_clustering() missing 1 required positional argument: 'value_column'"
+      },
+      {
+        "class": "tests.test_analytics.TestCollusionDetection",
+        "name": "test_price_patterns",
+        "message": "TypeError: CollusionDetection.detect_price_patterns() missing 1 required positional argument: 'value_column'"
+      }
+    ],
+    "coverage": {
+      "scope": "Measured src and utils modules; app.py and dashboard.py were not imported by the existing suite",
+      "totals": {
+        "covered_lines": 306,
+        "num_statements": 803,
+        "percent_covered": 38.10709838107098,
+        "percent_covered_display": "38",
+        "missing_lines": 497,
+        "excluded_lines": 0,
+        "percent_statements_covered": 38.10709838107098,
+        "percent_statements_covered_display": "38"
+      },
+      "files": {
+        "src/analytics.py": {
+          "covered_lines": 119,
+          "num_statements": 177,
+          "percent_covered": 67.2316384180791,
+          "percent_covered_display": "67",
+          "missing_lines": 58,
+          "excluded_lines": 0,
+          "percent_statements_covered": 67.2316384180791,
+          "percent_statements_covered_display": "67"
+        },
+        "src/api_integration.py": {
+          "covered_lines": 79,
+          "num_statements": 269,
+          "percent_covered": 29.36802973977695,
+          "percent_covered_display": "29",
+          "missing_lines": 190,
+          "excluded_lines": 0,
+          "percent_statements_covered": 29.36802973977695,
+          "percent_statements_covered_display": "29"
+        },
+        "src/data_generator.py": {
+          "covered_lines": 0,
+          "num_statements": 67,
+          "percent_covered": 0.0,
+          "percent_covered_display": "0",
+          "missing_lines": 67,
+          "excluded_lines": 0,
+          "percent_statements_covered": 0.0,
+          "percent_statements_covered_display": "0"
+        },
+        "src/financial_analysis.py": {
+          "covered_lines": 82,
+          "num_statements": 120,
+          "percent_covered": 68.33333333333333,
+          "percent_covered_display": "68",
+          "missing_lines": 38,
+          "excluded_lines": 0,
+          "percent_statements_covered": 68.33333333333333,
+          "percent_statements_covered_display": "68"
+        },
+        "src/visualizations.py": {
+          "covered_lines": 0,
+          "num_statements": 130,
+          "percent_covered": 0.0,
+          "percent_covered_display": "0",
+          "missing_lines": 130,
+          "excluded_lines": 0,
+          "percent_statements_covered": 0.0,
+          "percent_statements_covered_display": "0"
+        },
+        "utils/helpers.py": {
+          "covered_lines": 26,
+          "num_statements": 40,
+          "percent_covered": 65.0,
+          "percent_covered_display": "65",
+          "missing_lines": 14,
+          "excluded_lines": 0,
+          "percent_statements_covered": 65.0,
+          "percent_statements_covered_display": "65"
+        }
+      }
+    }
+  },
+  "feature_probes": {
+    "known_vendor_metrics": {
+      "hhi": 5000.0,
+      "cr1": 50.0,
+      "diversity": 0.9999999997114609
+    },
+    "known_finance_metrics": {
+      "npv_expected_0": -1.4210854715202004e-14,
+      "irr_expected_0_1": 0.1,
+      "payback_expected_1_5": 1.5,
+      "roi_expected_20": 20.0
+    },
+    "risk_heatmap": {
+      "identical_input_same_scores": false,
+      "x_labels": 10,
+      "z_columns": 22
+    },
+    "zscore_with_missing": {
+      "input_rows": 4,
+      "output_rows": 3
+    },
+    "efficiency_zero_days": 100,
+    "validator_string_value": {
+      "exception": "TypeError",
+      "message": "Invalid comparison between dtype=str and int"
+    },
+    "validator_empty": [
+      true,
+      []
+    ],
+    "validator_infinite_value": [
+      true,
+      []
+    ],
+    "quality_report_csv_dates": {
+      "exception": "AttributeError",
+      "message": "'str' object has no attribute 'isoformat'"
+    },
+    "generator_json_conversion": {
+      "exception": "TypeError",
+      "message": "DataFrame.to_dict() got multiple values for argument 'orient'"
+    },
+    "zero_record_generation": {
+      "exception": "KeyError",
+      "message": "'post_date'"
+    },
+    "vendor_timeseries_json": {
+      "exception": "TypeError",
+      "message": "Object of type Period is not JSON serializable"
+    },
+    "collusion_missing_argument": {
+      "exception": "TypeError",
+      "message": "CollusionDetection.detect_bid_clustering() missing 1 required positional argument: 'value_column'"
+    },
+    "price_pattern_missing_argument": {
+      "exception": "TypeError",
+      "message": "CollusionDetection.detect_price_patterns() missing 1 required positional argument: 'value_column'"
+    },
+    "collusion_unrelated_contracts": {
+      "similar_bids_count": 45,
+      "suspicious": true
+    },
+    "api_limit_and_dates": {
+      "requested_max": 3,
+      "rows": 5,
+      "processing_days": [
+        9,
+        9,
+        9,
+        9,
+        9
+      ],
+      "validation": [
+        false,
+        [
+          "Award date before post date in 5 records"
+        ]
+      ]
+    },
+    "api_fallback_provenance_and_filter": {
+      "rows": 20,
+      "source": "Sample Data (API Fallback)",
+      "errors": [
+        "Additional Sources: No data returned or connection failed",
+        "All API endpoints failed: Additional Sources",
+        "Automatically switched to sample data for demonstration"
+      ],
+      "dates_match_requested_range": false
+    },
+    "rate_limiter_call_times": [
+      0.0,
+      60.0,
+      60.0
+    ],
+    "documented_entrypoint": {
+      "exceptions": [],
+      "metrics": 5,
+      "errors": []
+    },
+    "enhanced_dashboard": {
+      "initial": {
+        "exceptions": [],
+        "metric_count": 15
+      },
+      "pages": {
+        "Home": {
+          "exceptions": [],
+          "metric_count": 15
+        },
+        "Data Management": {
+          "exceptions": [],
+          "metric_count": 6
+        },
+        "Anomaly Detection": {
+          "exceptions": [],
+          "metric_count": 3
+        },
+        "Vendor Analysis": {
+          "exceptions": [],
+          "metric_count": 5
+        },
+        "Collusion Detection": {
+          "exceptions": [
+            "CollusionDetection.detect_bid_clustering() missing 1 required positional argument: 'value_column'"
+          ],
+          "metric_count": 2
+        },
+        "Financial Analysis": {
+          "exceptions": [],
+          "metric_count": 9
+        },
+        "Efficiency Analysis": {
+          "exceptions": [],
+          "metric_count": 5
+        },
+        "Executive Dashboard": {
+          "exceptions": [],
+          "metric_count": 2
+        },
+        "Statistics": {
+          "exceptions": [],
+          "metric_count": 2
+        },
+        "Settings": {
+          "exceptions": [],
+          "metric_count": 2
+        }
+      },
+      "quick_actions": [
+        {
+          "button": "\ud83d\udd0d Run Anomaly Detection",
+          "radio_after_click": "Home",
+          "stored_page": "Anomaly Detection",
+          "still_home": true
+        },
+        {
+          "button": "\ud83c\udfe2 Vendor Analysis",
+          "radio_after_click": "Home",
+          "stored_page": "Vendor Analysis",
+          "still_home": true
+        },
+        {
+          "button": "\ud83d\udcca Executive Dashboard",
+          "radio_after_click": "Home",
+          "stored_page": "Executive Dashboard",
+          "still_home": true
+        }
+      ],
+      "csv_uploader_after_load_click": 0,
+      "csv_source_after_load_click": "Sample Data"
+    }
+  },
+  "additional_probes": {
+    "basic_sample_dates": {
+      "negative_processing_days": 97,
+      "rows": 200,
+      "minimum_days": -341
+    },
+    "completeness": {
+      "rows": 10,
+      "columns": 12,
+      "missing_cells": 6,
+      "shown_pct": 40.0,
+      "expected_pct": 95.0
+    },
+    "completeness_all_optional_missing": -200.0,
+    "settings_threshold_1": {
+      "zscore_message": [
+        "**Z-Score Anomalies:** 7 detected"
+      ]
+    },
+    "default_threshold": {
+      "zscore_message": [
+        "**Z-Score Anomalies:** 7 detected"
+      ]
+    },
+    "csv_loaded_directly": {
+      "exceptions": [
+        "'str' object has no attribute 'isoformat'"
+      ]
+    },
+    "malformed_live_record": {
+      "exceptions": [
+        "'is_anomaly'"
+      ],
+      "errors": [
+        "Error in anomaly detection: Input X contains infinity or a value too large for dtype('float64')."
+      ]
+    }
+  },
+  "live_api_probes": [
+    {
+      "url": "https://api.gem.gov.in/public/api/v1/contracts",
+      "status": 404,
+      "content_type": "text/html",
+      "response_shape": {
+        "json": false
+      },
+      "body_excerpt": "<html>\r\n<head><title>404 Not Found</title></head>\r\n<body>\r\n<center><h1>404 Not Found</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+    },
+    {
+      "url": "https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070",
+      "status": 400,
+      "content_type": "application/json",
+      "response_shape": {
+        "type": "dict",
+        "keys": [
+          "error"
+        ]
+      },
+      "body_excerpt": "{\n    \"error\": \"Authorization field missing\"\n}"
+    }
+  ],
+  "dependency_audit": {
+    "package_count": 78,
+    "known_vulnerability_count": 0,
+    "includes_audit_tools": true,
+    "packages": [
+      {
+        "name": "altair",
+        "version": "6.3.0",
+        "vulns": []
+      },
+      {
+        "name": "anyio",
+        "version": "4.16.0",
+        "vulns": []
+      },
+      {
+        "name": "attrs",
+        "version": "26.1.0",
+        "vulns": []
+      },
+      {
+        "name": "blinker",
+        "version": "1.9.0",
+        "vulns": []
+      },
+      {
+        "name": "boolean-py",
+        "version": "5.0",
+        "vulns": []
+      },
+      {
+        "name": "cachecontrol",
+        "version": "0.15.0",
+        "vulns": []
+      },
+      {
+        "name": "certifi",
+        "version": "2026.10.23",
+        "vulns": []
+      },
+      {
+        "name": "charset-normalizer",
+        "version": "3.5.2",
+        "vulns": []
+      },
+      {
+        "name": "click",
+        "version": "8.5.1",
+        "vulns": []
+      },
+      {
+        "name": "cloudpickle",
+        "version": "3.1.3",
+        "vulns": []
+      },
+      {
+        "name": "contourpy",
+        "version": "1.4.0",
+        "vulns": []
+      },
+      {
+        "name": "coverage",
+        "version": "7.17.3",
+        "vulns": []
+      },
+      {
+        "name": "cycler",
+        "version": "0.12.1",
+        "vulns": []
+      },
+      {
+        "name": "cyclonedx-python-lib",
+        "version": "11.12.0",
+        "vulns": []
+      },
+      {
+        "name": "defusedxml",
+        "version": "0.7.1",
+        "vulns": []
+      },
+      {
+        "name": "et-xmlfile",
+        "version": "2.0.0",
+        "vulns": []
+      },
+      {
+        "name": "filelock",
+        "version": "4.2.12",
+        "vulns": []
+      },
+      {
+        "name": "flask",
+        "version": "3.1.3",
+        "vulns": []
+      },
+      {
+        "name": "fonttools",
+        "version": "4.68.0",
+        "vulns": []
+      },
+      {
+        "name": "gunicorn",
+        "version": "27.0.1",
+        "vulns": []
+      },
+      {
+        "name": "h11",
+        "version": "0.16.0",
+        "vulns": []
+      },
+      {
+        "name": "idna",
+        "version": "3.20",
+        "vulns": []
+      },
+      {
+        "name": "iniconfig",
+        "version": "2.3.1",
+        "vulns": []
+      },
+      {
+        "name": "itsdangerous",
+        "version": "2.2.0",
+        "vulns": []
+      },
+      {
+        "name": "jinja2",
+        "version": "3.1.6",
+        "vulns": []
+      },
+      {
+        "name": "joblib",
+        "version": "1.6.0",
+        "vulns": []
+      },
+      {
+        "name": "jsonschema",
+        "version": "4.26.0",
+        "vulns": []
+      },
+      {
+        "name": "jsonschema-specifications",
+        "version": "2025.9.1",
+        "vulns": []
+      },
+      {
+        "name": "kiwisolver",
+        "version": "1.5.1",
+        "vulns": []
+      },
+      {
+        "name": "license-expression",
+        "version": "30.4.4",
+        "vulns": []
+      },
+      {
+        "name": "markdown-it-py",
+        "version": "4.3.0",
+        "vulns": []
+      },
+      {
+        "name": "markupsafe",
+        "version": "3.0.4",
+        "vulns": []
+      },
+      {
+        "name": "matplotlib",
+        "version": "3.11.2",
+        "vulns": []
+      },
+      {
+        "name": "mdurl",
+        "version": "0.1.2",
+        "vulns": []
+      },
+      {
+        "name": "msgpack",
+        "version": "1.2.4",
+        "vulns": []
+      },
+      {
+        "name": "narwhals",
+        "version": "2.29.0",
+        "vulns": []
+      },
+      {
+        "name": "numpy",
+        "version": "2.5.5",
+        "vulns": []
+      },
+      {
+        "name": "openpyxl",
+        "version": "3.1.5",
+        "vulns": []
+      },
+      {
+        "name": "packageurl-python",
+        "version": "0.17.6",
+        "vulns": []
+      },
+      {
+        "name": "packaging",
+        "version": "26.3",
+        "vulns": []
+      },
+      {
+        "name": "pandas",
+        "version": "3.1.1",
+        "vulns": []
+      },
+      {
+        "name": "pillow",
+        "version": "13.0.0",
+        "vulns": []
+      },
+      {
+        "name": "pip",
+        "version": "26.3",
+        "vulns": []
+      },
+      {
+        "name": "pip-api",
+        "version": "0.0.35",
+        "vulns": []
+      },
+      {
+        "name": "pip-audit",
+        "version": "2.10.1",
+        "vulns": []
+      },
+      {
+        "name": "pip-requirements-parser",
+        "version": "32.0.1",
+        "vulns": []
+      },
+      {
+        "name": "platformdirs",
+        "version": "4.14.8",
+        "vulns": []
+      },
+      {
+        "name": "plotly",
+        "version": "7.1.0",
+        "vulns": []
+      },
+      {
+        "name": "pluggy",
+        "version": "1.7.0",
+        "vulns": []
+      },
+      {
+        "name": "protobuf",
+        "version": "7.36.2",
+        "vulns": []
+      },
+      {
+        "name": "py-serializable",
+        "version": "2.2.0",
+        "vulns": []
+      },
+      {
+        "name": "pyarrow",
+        "version": "26.0.1",
+        "vulns": []
+      },
+      {
+        "name": "pydeck",
+        "version": "0.9.3",
+        "vulns": []
+      },
+      {
+        "name": "pygments",
+        "version": "2.21.0",
+        "vulns": []
+      },
+      {
+        "name": "pyparsing",
+        "version": "3.3.3",
+        "vulns": []
+      },
+      {
+        "name": "pytest",
+        "version": "9.2.0",
+        "vulns": []
+      },
+      {
+        "name": "pytest-cov",
+        "version": "7.1.0",
+        "vulns": []
+      },
+      {
+        "name": "python-dateutil",
+        "version": "4.0.0",
+        "vulns": []
+      },
+      {
+        "name": "python-multipart",
+        "version": "0.0.34",
+        "vulns": []
+      },
+      {
+        "name": "referencing",
+        "version": "0.37.0",
+        "vulns": []
+      },
+      {
+        "name": "requests",
+        "version": "2.34.2",
+        "vulns": []
+      },
+      {
+        "name": "rich",
+        "version": "15.0.0",
+        "vulns": []
+      },
+      {
+        "name": "rpds-py",
+        "version": "2026.9.1",
+        "vulns": []
+      },
+      {
+        "name": "scikit-learn",
+        "version": "1.9.1",
+        "vulns": []
+      },
+      {
+        "name": "scipy",
+        "version": "1.18.1",
+        "vulns": []
+      },
+      {
+        "name": "seaborn",
+        "version": "0.13.2",
+        "vulns": []
+      },
+      {
+        "name": "sortedcontainers",
+        "version": "2.4.0",
+        "vulns": []
+      },
+      {
+        "name": "starlette",
+        "version": "1.10.0",
+        "vulns": []
+      },
+      {
+        "name": "streamlit",
+        "version": "1.67.0",
+        "vulns": []
+      },
+      {
+        "name": "threadpoolctl",
+        "version": "3.8.0",
+        "vulns": []
+      },
+      {
+        "name": "tomli",
+        "version": "2.5.0",
+        "vulns": []
+      },
+      {
+        "name": "tomli-w",
+        "version": "1.2.0",
+        "vulns": []
+      },
+      {
+        "name": "typing-extensions",
+        "version": "4.16.0",
+        "vulns": []
+      },
+      {
+        "name": "tzdata",
+        "version": "2026.6",
+        "vulns": []
+      },
+      {
+        "name": "urllib3",
+        "version": "2.8.0",
+        "vulns": []
+      },
+      {
+        "name": "uvicorn",
+        "version": "0.54.0",
+        "vulns": []
+      },
+      {
+        "name": "websockets",
+        "version": "17.4",
+        "vulns": []
+      },
+      {
+        "name": "werkzeug",
+        "version": "3.1.9",
+        "vulns": []
+      }
+    ],
+    "scope_limit": "Only the package versions installed in this temporary environment on the audit date."
+  },
+  "verification_limits": [
+    "No hosted deployment inspected",
+    "No browser download completion checked",
+    "No visual accessibility or mobile layout checks",
+    "No Windows execution",
+    "No sustained load or concurrent session test",
+    "Live endpoints were called without credentials",
+    "Application code and datasets were not modified"
+  ]
+}

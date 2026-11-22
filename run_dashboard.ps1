@@ -1,28 +1,12 @@
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "   TransparAI Dashboard - SFLC.in" -ForegroundColor Yellow
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host ""
-
-    try {
-    $pythonVersion = python --version 2>&1
-    Write-Host "OK Python found: $pythonVersion" -ForegroundColor Green
-} catch {
-    Write-Host "ERROR: Python is not installed or not in PATH" -ForegroundColor Red
-    Write-Host "Please install Python 3.8 or higher from https://python.org" -ForegroundColor Yellow
-    exit 1
+$ErrorActionPreference = 'Stop'
+Set-Location $PSScriptRoot
+python -c "import sys; assert sys.version_info[:2] == (3, 13), 'Use Python 3.13'"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if (-not (Test-Path '.venv')) {
+    python -m venv .venv
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
-
-if (-not (Test-Path "venv")) {
-    Write-Host "Creating virtual environment..." -ForegroundColor Yellow
-    python -m venv venv
-}
-
-Write-Host "Activating virtual environment..." -ForegroundColor Yellow
-.\venv\Scripts\Activate.ps1
-
-Write-Host "Installing dependencies..." -ForegroundColor Yellow
-pip install -r requirements.txt
-
-Write-Host "Starting Streamlit dashboard..." -ForegroundColor Green
-Write-Host "The dashboard will open in your default browser automatically." -ForegroundColor Cyan
-streamlit run app.py
+& .\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& .\.venv\Scripts\python.exe -m streamlit run app.py
+exit $LASTEXITCODE
